@@ -76,11 +76,11 @@ function addYears(iso, years=1){ const d=parseISO(iso); if(!d) return null; d.se
 
 /* ====================== COMPONENTES UI ====================== */
 const Card = ({children, className="", onClick})=> <div onClick={onClick} className={`rounded-2xl border bg-white shadow-sm transition-all ${onClick ? 'cursor-pointer hover:shadow-md active:scale-[0.98]' : ''} ${className}`}>{children}</div>;
-const Label = ({children, className=""})=> <label className={`text-xs font-bold text-gray-500 uppercase mb-1 block ${className}`}>{children}</label>;
-const Input = ({className="",...p})=> <input className={`w-full px-3 py-2 rounded-xl border bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all text-sm text-slate-900 ${className}`} {...p}/>;
+const Label = ({children, className=""})=> <label className={`text-xs font-black text-slate-800 uppercase mb-1 block tracking-tight ${className}`}>{children}</label>;
+const Input = ({className="",...p})=> <input className={`w-full px-3 py-2 rounded-xl border border-slate-300 bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all text-sm text-slate-900 font-bold ${className}`} {...p}/>;
 const Button = ({children, className="", variant="primary", ...p})=> {
-  const base = "inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl font-bold transition-all active:scale-95 text-sm";
-  let styles = variant === "primary" ? "bg-blue-600 text-white hover:bg-blue-700" : (variant === "secondary" ? "bg-white border border-gray-200 text-gray-700 hover:bg-gray-50" : "bg-red-50 text-red-600 border border-red-100 hover:bg-red-100");
+  const base = "inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl font-black transition-all active:scale-95 text-xs uppercase tracking-tighter";
+  let styles = variant === "primary" ? "bg-blue-600 text-white hover:bg-blue-700 shadow-md" : (variant === "secondary" ? "bg-white border-2 border-slate-200 text-slate-900 hover:bg-slate-50" : "bg-red-50 text-red-700 border border-red-200 hover:bg-red-100");
   return <button className={`${base} ${styles} ${className}`} {...p}>{children}</button>;
 };
 
@@ -88,14 +88,12 @@ const EstadoBadge = ({ estado }) => {
   const map = { 
     VENCIDA:"bg-red-600 text-white", 
     URGENTE:"bg-orange-500 text-white", 
-    PRONTO:"bg-yellow-400 text-black", 
+    PRONTO:"bg-yellow-400 text-slate-900", 
     OK:"bg-emerald-600 text-white" 
   };
-  
-  const isErrorStatus = estado && (estado.includes("INGRESAR") || estado.includes("CONFIG"));
-  const style = isErrorStatus ? "bg-slate-400 text-white border border-slate-500" : (map[estado] || "bg-gray-200 text-gray-600");
-  
-  return <span className={`px-2 py-0.5 rounded-lg text-[10px] font-black uppercase shadow-sm ${style}`}>{estado}</span>;
+  const isMissing = estado && (estado.includes("LECTURA") || estado.includes("PREV") || estado.includes("GEN"));
+  const style = isMissing ? "bg-slate-800 text-white border-2 border-slate-400" : (map[estado] || "bg-slate-200 text-slate-900");
+  return <span className={`px-2 py-1 rounded-lg text-[10px] font-black uppercase shadow-sm whitespace-nowrap ${style}`}>{estado}</span>;
 };
 
 /* =================== EDITOR DE EQUIPO =================== */
@@ -103,64 +101,60 @@ const RowEditor = memo(function RowEditor({ e, calcularEstado, updateEquipo, rem
   const s = calcularEstado(e);
   const cat = CATEGORIES.find(c=>c.id===e.categoria);
   const upd = (p) => updateEquipo(e.id, p);
-  
   const esCamioneta = e.categoria === "CAMIONETA";
   const esCamion = e.categoria === "CAMION";
   const esBateaOCama = ["BATEA", "CAMA_BAJA"].includes(e.categoria);
   const sinLegal = ["CARGADOR", "EXCAVADORA", "GENERADOR"].includes(e.categoria);
-  
-  const labelMain = esCamioneta ? "Odómetro" : "Horómetro";
   const unit = esCamioneta ? "km" : "h";
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 animate-in fade-in duration-500">
+    <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 animate-in fade-in duration-500 text-slate-900">
       <div className="lg:col-span-3 space-y-6">
-        <Card className="p-6">
-          {/* Identificación */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-            <div><Label>Marca</Label>
-              <select className="w-full text-sm border rounded-xl p-2 bg-gray-50 font-bold text-slate-900" value={e.marca} onChange={v=>upd({marca:v.target.value, patente:""})}>
-                <option value="">—</option>
+        <Card className="p-6 border-slate-200">
+          {/* Fila 1: Selectores */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+            <div><Label>Marca del Equipo</Label>
+              <select className="w-full text-sm border-2 border-slate-200 rounded-xl p-2 bg-white font-black text-slate-900" value={e.marca} onChange={v=>upd({marca:v.target.value, patente:""})}>
+                <option value="">— Seleccionar —</option>
                 {(BRAND_OPTIONS[e.categoria]||[]).map(m=><option key={m}>{m}</option>)}
               </select>
             </div>
-            <div><Label>Patente</Label>
-              <select className="w-full text-sm border rounded-xl p-2 bg-gray-50 font-black text-blue-700 uppercase" value={e.patente} onChange={v=>upd({patente:v.target.value})}>
-                <option value="">—</option>
+            <div><Label>Patente / ID</Label>
+              <select className="w-full text-sm border-2 border-slate-200 rounded-xl p-2 bg-white font-black text-blue-700 uppercase" value={e.patente} onChange={v=>upd({patente:v.target.value})}>
+                <option value="">— Seleccionar —</option>
                 {platesFor(e.categoria, e.marca).map(p=><option key={p}>{p}</option>)}
               </select>
             </div>
-            <div><Label>Operador Responsable</Label>
-              <select className="w-full text-sm border rounded-xl p-2 bg-gray-50 font-bold text-slate-900" value={e.operador} onChange={v=>upd({operador:v.target.value})}>
-                <option value="">—</option>
+            <div><Label>Operador a Cargo</Label>
+              <select className="w-full text-sm border-2 border-slate-200 rounded-xl p-2 bg-white font-black text-slate-900" value={e.operador} onChange={v=>upd({operador:v.target.value})}>
+                <option value="">— Seleccionar —</option>
                 {OPERATORS.map(o=><option key={o}>{o}</option>)}
               </select>
             </div>
           </div>
 
-          {/* RECUADRO AZUL DESTACADO PARA TODOS LOS EQUIPOS (Excepto Bateas) */}
+          {/* RECUADRO AZUL UNIVERSAL: LECTURA ACTUAL */}
           {!esBateaOCama && (
-            <div className="mb-8 p-6 bg-gradient-to-br from-blue-600 to-blue-700 rounded-3xl shadow-xl border-b-4 border-blue-900">
-               <div className="flex items-center gap-2 mb-4 justify-center">
-                 <span className="text-xl">📍</span>
-                 <h4 className="text-xs font-black text-blue-100 uppercase tracking-[0.2em] italic">Registro de Lectura Actual</h4>
+            <div className="mb-8 p-6 bg-gradient-to-r from-blue-700 to-blue-600 rounded-[2rem] shadow-xl border-b-8 border-blue-900">
+               <div className="flex items-center gap-3 mb-4 justify-center">
+                 <span className="text-2xl">📍</span>
+                 <h4 className="text-xs font-black text-white uppercase tracking-[0.2em] italic">Registro de Lectura Actual</h4>
                </div>
-               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                   <div>
-                    <Label className="text-blue-100 opacity-80 mb-2">Lectura {labelMain} ({unit})</Label>
+                    <Label className="text-blue-100 mb-2">Horómetro/Odómetro ({unit})</Label>
                     <input 
                       type="number" 
-                      className="w-full px-5 py-4 rounded-2xl bg-white text-blue-900 font-black text-2xl focus:ring-4 focus:ring-blue-300 outline-none transition-all shadow-inner" 
-                      placeholder="0.0"
+                      className="w-full px-6 py-5 rounded-2xl bg-white text-slate-900 font-black text-3xl focus:ring-4 focus:ring-blue-400 outline-none transition-all shadow-inner" 
                       value={e.horaActual || ""} 
                       onChange={v=>upd({horaActual:Number(v.target.value)})}
                     />
                   </div>
                   <div>
-                    <Label className="text-blue-100 opacity-80 mb-2">Fecha de Toma</Label>
+                    <Label className="text-blue-100 mb-2">Fecha de esta Lectura</Label>
                     <input 
                       type="date" 
-                      className="w-full px-5 py-4 rounded-2xl bg-white text-blue-900 font-bold text-lg focus:ring-4 focus:ring-blue-300 outline-none transition-all shadow-inner" 
+                      className="w-full px-6 py-5 rounded-2xl bg-white text-slate-900 font-black text-xl focus:ring-4 focus:ring-blue-400 outline-none shadow-inner" 
                       value={e.horaActualFecha || ""} 
                       onChange={v=>upd({horaActualFecha: v.target.value})}
                     />
@@ -169,56 +163,54 @@ const RowEditor = memo(function RowEditor({ e, calcularEstado, updateEquipo, rem
             </div>
           )}
 
-          {/* Registro Dual para Camiones */}
+          {/* Registro Dual Camión */}
           {esCamion && (
-            <div className="mb-8 p-6 bg-slate-800 rounded-3xl shadow-lg border-b-4 border-slate-950">
-               <div className="flex items-center gap-2 mb-4">
-                 <span className="text-lg">🛣️</span>
-                 <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest italic">Registro Complementario: Odómetro (km)</h4>
-               </div>
+            <div className="mb-8 p-6 bg-slate-900 rounded-3xl shadow-lg border-b-4 border-black">
+               <h4 className="text-[10px] font-black text-slate-400 uppercase mb-4 tracking-widest italic flex items-center gap-2">
+                 <span className="text-lg">🛣️</span> Registro Complementario: Odómetro (km)
+               </h4>
                <div className="grid grid-cols-2 gap-6">
-                  <div className="relative">
-                    <input type="number" className="w-full px-4 py-3 rounded-xl bg-slate-700 text-white font-black text-xl outline-none" placeholder="Km actual..." value={e.odometro || ""} onChange={v=>upd({odometro: Number(v.target.value)})}/>
-                  </div>
-                  <div className="relative">
-                    <input type="date" className="w-full px-4 py-3 rounded-xl bg-slate-700 text-white font-bold outline-none" value={e.odometroFecha || ""} onChange={v=>upd({odometroFecha: v.target.value})}/>
-                  </div>
+                  <input type="number" className="w-full px-5 py-3 rounded-xl bg-slate-800 text-white font-black text-xl outline-none border border-slate-700" placeholder="Km actual..." value={e.odometro || ""} onChange={v=>upd({odometro: Number(v.target.value)})}/>
+                  <input type="date" className="w-full px-5 py-3 rounded-xl bg-slate-800 text-white font-black text-lg outline-none border border-slate-700" value={e.odometroFecha || ""} onChange={v=>upd({odometroFecha: v.target.value})}/>
                </div>
             </div>
           )}
 
-          {/* Parámetros Técnicos */}
+          {/* Planificación y Útimas Mantenciones */}
           {!esBateaOCama && (
-            <>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6 text-slate-900">
-                <div><Label>Plan Prev cada ({unit})</Label><Input type="number" placeholder={cat?.defaultPreventive} value={e.preventivaCada || ""} onChange={v=>upd({preventivaCada: Number(v.target.value)})}/></div>
-                <div><Label>Plan Gen cada ({unit})</Label><Input type="number" value={e.generalCada || 2000} onChange={v=>upd({generalCada:Number(v.target.value)})}/></div>
-                <div><Label>{esCamioneta ? "Km" : "Horas"} Diarias</Label><Input type="number" placeholder="Opcional" value={e.horasDiariasOverride || ""} onChange={v=>upd({horasDiariasOverride: Number(v.target.value)})}/></div>
-                <div className="flex flex-col justify-end text-[9px] text-slate-400 font-bold italic uppercase leading-tight">Configuración del Plan de Mantenimiento</div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200">
+                <h5 className="text-[10px] font-black uppercase text-slate-500 mb-4 tracking-widest">Plan de Mantenimiento</h5>
+                <div className="grid grid-cols-2 gap-4">
+                  <div><Label>Prev cada ({unit})</Label><Input type="number" placeholder={cat?.defaultPreventive} value={e.preventivaCada || ""} onChange={v=>upd({preventivaCada: Number(v.target.value)})}/></div>
+                  <div><Label>Gen cada ({unit})</Label><Input type="number" value={e.generalCada || 2000} onChange={v=>upd({generalCada:Number(v.target.value)})}/></div>
+                  <div className="col-span-2"><Label>{esCamioneta ? "Km" : "Horas"} Diarias (Proyección)</Label><Input type="number" value={e.horasDiariasOverride || ""} onChange={v=>upd({horasDiariasOverride: Number(v.target.value)})}/></div>
+                </div>
               </div>
-
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6 text-slate-900">
-                <div><Label>Última Prev Realizada</Label><Input type="number" value={e.ultimaPreventivaHora || ""} onChange={v=>upd({ultimaPreventivaHora:Number(v.target.value)})}/></div>
-                <div><Label>Última Gen Realizada</Label><Input type="number" value={e.ultimaGeneralHora || ""} onChange={v=>upd({ultimaGeneralHora:Number(v.target.value)})}/></div>
-                {!sinLegal ? (
-                  <>
-                    <div><Label>Vence RT</Label><Input type="date" value={e.rtUltima || ""} onChange={v=>upd({rtUltima:v.target.value})}/></div>
-                    <div><Label>Vence PC</Label><Input type="date" value={e.pcUltimo || ""} onChange={v=>upd({pcUltimo:v.target.value})}/></div>
-                  </>
-                ) : <div className="md:col-span-2"></div>}
+              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200">
+                <h5 className="text-[10px] font-black uppercase text-slate-500 mb-4 tracking-widest">Últimas Realizadas</h5>
+                <div className="grid grid-cols-2 gap-4">
+                  <div><Label>Última Prev ({unit})</Label><Input type="number" value={e.ultimaPreventivaHora || ""} onChange={v=>upd({ultimaPreventivaHora:Number(v.target.value)})}/></div>
+                  <div><Label>Última Gen ({unit})</Label><Input type="number" value={e.ultimaGeneralHora || ""} onChange={v=>upd({ultimaGeneralHora:Number(v.target.value)})}/></div>
+                  {!sinLegal && (
+                    <>
+                      <div><Label>Vence RT</Label><Input type="date" value={e.rtUltima || ""} onChange={v=>upd({rtUltima:v.target.value})}/></div>
+                      <div><Label>Vence PC</Label><Input type="date" value={e.pcUltimo || ""} onChange={v=>upd({pcUltimo:v.target.value})}/></div>
+                    </>
+                  )}
+                </div>
               </div>
-            </>
+            </div>
           )}
 
-          {/* Legal para Bateas */}
           {esBateaOCama && (
-            <div className="grid grid-cols-2 gap-4 mb-6">
+            <div className="grid grid-cols-2 gap-4 mb-8">
               <div><Label>Vence Revisión Técnica</Label><Input type="date" value={e.rtUltima || ""} onChange={v=>upd({rtUltima:v.target.value})}/></div>
               <div><Label>Vence Permiso de Circulación</Label><Input type="date" value={e.pcUltimo || ""} onChange={v=>upd({pcUltimo:v.target.value})}/></div>
             </div>
           )}
 
-          <div className="mb-6"><Label>Notas Técnicas</Label><textarea className="w-full px-3 py-2 rounded-xl border bg-gray-50 focus:bg-white text-sm h-16 text-slate-900" value={e.notas || ""} onChange={v=>upd({notas:v.target.value})} placeholder="Detalles de fallas, reparaciones..."/></div>
+          <div className="mb-8"><Label>Notas de Terreno</Label><textarea className="w-full px-4 py-3 rounded-xl border-2 border-slate-200 focus:border-blue-500 text-sm h-24 text-slate-900 font-bold" value={e.notas || ""} onChange={v=>upd({notas:v.target.value})} placeholder="Escribir fallas o pendientes aquí..."/></div>
 
           {!esBateaOCama && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -229,42 +221,53 @@ const RowEditor = memo(function RowEditor({ e, calcularEstado, updateEquipo, rem
         </Card>
       </div>
 
-      {/* PANEL DE CONTROL DERECHO */}
+      {/* PANEL LATERAL: ESTADOS INDEPENDIENTES */}
       <div className="space-y-4">
         {!esBateaOCama ? (
-          <Card className="p-6 bg-white border-2 border-slate-100 shadow-xl text-slate-900">
-            <h4 className="text-[11px] font-black uppercase tracking-widest mb-6 text-slate-400 italic text-center">Estatus de Ciclo</h4>
-            <div className="space-y-8">
-              <div>
-                <div className="flex justify-between items-center mb-1"><span className="text-[10px] font-bold uppercase text-slate-500">Próx. Preventiva</span><EstadoBadge estado={s.salud} /></div>
+          <Card className="p-6 bg-white border-2 border-slate-100 shadow-xl text-slate-900 text-left">
+            <h4 className="text-[11px] font-black uppercase tracking-widest mb-8 text-slate-400 italic text-center">Estatus de Ciclo</h4>
+            <div className="space-y-10">
+              {/* Bloque Preventiva */}
+              <div className="relative">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-[10px] font-black uppercase text-slate-600">Próx. Preventiva</span>
+                  <EstadoBadge estado={s.estPrev} />
+                </div>
                 <p className="text-3xl font-black italic tracking-tighter text-slate-900 leading-none">
-                  {s.salud.includes("INGRESAR") || s.salud.includes("CONFIG") ? "—" : `${fmt(s.proxPrev)} ${unit}`}
+                  {s.estPrev.includes("LECTURA") || s.estPrev.includes("PREV") ? "—" : `${fmt(s.proxPrev)} ${unit}`}
                 </p>
-                {!s.salud.includes("INGRESAR") && !s.salud.includes("CONFIG") && (
-                   <p className="text-[11px] font-bold text-blue-600 mt-1 uppercase">Restan: {fmt(s.restPrev)} {unit}</p>
+                {!s.estPrev.includes("LECTURA") && !s.estPrev.includes("PREV") && (
+                   <p className="text-[11px] font-black text-blue-600 mt-2 uppercase">Faltan: {fmt(s.restPrev)} {unit}</p>
                 )}
-                <button onClick={()=>{if(window.confirm(`¿Registrar realización?`)) upd({ultimaPreventivaHora: s.horaActual})}} className="w-full mt-4 bg-white text-slate-900 py-3 rounded-xl font-black text-xs uppercase tracking-tighter hover:bg-emerald-50 shadow-md border border-slate-100 transition-all">Registrar Prev.</button>
+                <button onClick={()=>{if(window.confirm(`¿Registrar Preventiva realizada ahora?`)) upd({ultimaPreventivaHora: s.horaActual})}} className="w-full mt-4 bg-slate-900 text-white py-3 rounded-xl font-black text-[10px] uppercase tracking-tighter hover:bg-blue-600 transition-all shadow-md">Registrar Prev.</button>
               </div>
-              <div className="border-t border-slate-100 pt-6">
-                <div className="flex justify-between items-center mb-1"><span className="text-[10px] font-bold uppercase text-slate-500">Próx. General</span></div>
+
+              {/* Bloque General */}
+              <div className="border-t-2 border-slate-100 pt-8 relative">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-[10px] font-black uppercase text-slate-600">Próx. General</span>
+                  <EstadoBadge estado={s.estGen} />
+                </div>
                 <p className="text-3xl font-black italic tracking-tighter text-slate-900 leading-none">
-                  {s.salud.includes("INGRESAR") || s.salud.includes("CONFIG") ? "—" : `${fmt(s.proxGen)} ${unit}`}
+                  {s.estGen.includes("LECTURA") || s.estGen.includes("GEN") ? "—" : `${fmt(s.proxGen)} ${unit}`}
                 </p>
-                <button onClick={()=>{if(window.confirm(`¿Registrar realización?`)) upd({ultimaGeneralHora: s.horaActual})}} className="w-full mt-4 bg-white text-slate-900 py-3 rounded-xl font-black text-xs uppercase tracking-tighter hover:bg-blue-50 shadow-md border border-slate-100 transition-all">Registrar Gen.</button>
+                {!s.estGen.includes("LECTURA") && !s.estGen.includes("GEN") && (
+                   <p className="text-[11px] font-black text-blue-600 mt-2 uppercase">Faltan: {fmt(s.restGen)} {unit}</p>
+                )}
+                <button onClick={()=>{if(window.confirm(`¿Registrar General realizada ahora?`)) upd({ultimaGeneralHora: s.horaActual})}} className="w-full mt-4 bg-slate-100 text-slate-900 py-3 rounded-xl font-black text-[10px] uppercase tracking-tighter hover:bg-slate-200 border-2 border-slate-200 transition-all shadow-sm">Registrar Gen.</button>
               </div>
             </div>
           </Card>
         ) : (
           <Card className="p-6 bg-slate-900 text-white shadow-xl">
-             <h4 className="text-[10px] font-black uppercase text-slate-400 mb-6 tracking-widest text-center">Estatus Legal</h4>
+             <h4 className="text-[10px] font-black uppercase text-slate-400 mb-6 tracking-widest text-center italic">Estatus Legal</h4>
              <div className="space-y-6">
                 <div><Label className="text-slate-400">R. Técnica</Label><EstadoBadge estado={estadoPorDias(daysBetween(todayISO(), addYears(e.rtUltima || todayISO(), 1)), 30)} /></div>
                 <div><Label className="text-slate-400">P. Circulación</Label><EstadoBadge estado={estadoPorDias(daysBetween(todayISO(), addYears(e.pcUltimo || todayISO(), 1)), 30)} /></div>
              </div>
           </Card>
         )}
-        <DocumentManager equipoId={e.id} docs={e.documentos || []} onUpdate={v => upd({documentos: v})} />
-        <Button variant="danger" className="w-full py-3 uppercase tracking-tighter font-black opacity-60 hover:opacity-100 transition-all" onClick={()=>removeEquipo(e.id)}>Dar de Baja Activo</Button>
+        <Button variant="danger" className="w-full py-4 opacity-50 hover:opacity-100" onClick={()=>removeEquipo(e.id)}>Eliminar de la Flota</Button>
       </div>
     </div>
   );
@@ -272,56 +275,19 @@ const RowEditor = memo(function RowEditor({ e, calcularEstado, updateEquipo, rem
 
 /* =================== TABLAS E INSUMOS =================== */
 function InsumosTable({ title, value = [], onChange }){
-  const add = () => onChange([...value, { tipo:"Filtro", nombre:"", cant:1, enBodega:false }]);
+  const add = () => onChange([...value, { tipo:"Filtro", nombre:"", cant:1 }]);
   return (
-    <div className="bg-white border rounded-2xl p-4 shadow-sm text-slate-900">
+    <div className="bg-white border-2 border-slate-100 rounded-2xl p-4">
       <div className="flex justify-between items-center mb-4">
-        <h4 className="font-black text-xs uppercase tracking-wider">{title}</h4>
-        <Button onClick={add} variant="secondary" className="h-7 text-[10px] shadow-sm tracking-tight">+ ITEM</Button>
+        <h4 className="font-black text-[10px] uppercase text-slate-500 tracking-widest">{title}</h4>
+        <button onClick={add} className="text-[10px] font-black text-blue-600 hover:text-blue-800 uppercase tracking-tighter border-b-2 border-blue-600">+ AGREGAR</button>
       </div>
       <div className="space-y-2">
         {value.map((r, i) => (
-          <div key={i} className="flex flex-wrap md:flex-nowrap gap-2 items-center border-b border-gray-50 pb-2 last:border-0">
-            <select className="text-[10px] border rounded bg-gray-50 font-bold p-1" value={r.tipo} onChange={e=>onChange(value.map((x,idx)=>idx===i?{...x, tipo:e.target.value}:x))}>
-              <option>Filtro</option><option>Aceite</option><option>Otro</option>
-            </select>
-            <input className="text-[10px] border rounded flex-1 p-1" placeholder="Nombre..." value={r.nombre} onChange={e=>onChange(value.map((x,idx)=>idx===i?{...x, nombre:e.target.value}:x))} />
-            <input type="number" className="text-[10px] border rounded w-10 p-1 font-bold" value={r.cant} onChange={e=>onChange(value.map((x,idx)=>idx===i?{...x, cant:Number(e.target.value)}:x))} />
-            <button onClick={()=>onChange(value.filter((_,idx)=>idx!==i))} className="text-red-400 font-bold px-1">✕</button>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function DocumentManager({ equipoId, docs = [], onUpdate }){
-  const [uploading, setUploading] = useState(false);
-  const handleUpload = async (e) => {
-    const file = e.target.files[0]; if(!file) return;
-    setUploading(true);
-    try {
-      const fileRef = ref(storage, `equipos/${equipoId}/${Date.now()}_${file.name}`);
-      await uploadBytes(fileRef, file);
-      const url = await getDownloadURL(fileRef);
-      onUpdate([...docs, { name: file.name, url, path: fileRef.fullPath }]);
-    } catch (err) { alert("Error: " + err.message); }
-    setUploading(false);
-  };
-  return (
-    <div className="bg-gray-50 rounded-2xl p-4 border border-dashed border-gray-300">
-      <div className="flex justify-between items-center mb-3">
-        <h4 className="font-bold text-[10px] uppercase text-slate-400">Documentos</h4>
-        <label className="cursor-pointer bg-blue-600 text-white px-2 py-1 rounded text-[9px] font-black hover:bg-blue-700 uppercase transition-all">
-          {uploading ? "..." : "+ Subir"}
-          <input type="file" className="hidden" onChange={handleUpload} disabled={uploading} />
-        </label>
-      </div>
-      <div className="space-y-1">
-        {docs.map((d, i) => (
-          <div key={i} className="flex items-center justify-between bg-white p-1.5 rounded border text-[9px]">
-            <a href={d.url} target="_blank" rel="noreferrer" className="text-blue-600 font-bold truncate flex-1 underline">{d.name}</a>
-            <button onClick={async () => { if(window.confirm("¿Eliminar?")){ await deleteObject(ref(storage, d.path)); onUpdate(docs.filter((_, idx)=>idx!==i)); } }} className="text-red-400 ml-2 font-bold">✕</button>
+          <div key={i} className="flex gap-2 items-center border-b border-slate-50 pb-2 text-slate-900">
+            <input className="text-[10px] border-none bg-slate-100 rounded p-1 w-10 font-black" type="number" value={r.cant} onChange={e=>onChange(value.map((x,idx)=>idx===i?{...x, cant:Number(e.target.value)}:x))} />
+            <input className="text-[10px] border-none bg-slate-100 rounded flex-1 p-1 font-bold" placeholder="Nombre..." value={r.nombre} onChange={e=>onChange(value.map((x,idx)=>idx===i?{...x, nombre:e.target.value}:x))} />
+            <button onClick={()=>onChange(value.filter((_,idx)=>idx!==i))} className="text-red-400 font-bold px-1 text-xs">✕</button>
           </div>
         ))}
       </div>
@@ -344,65 +310,76 @@ export default function AppMantenciones(){
 
   const calcularEstado = useCallback((e)=>{
     const esCamioneta = e.categoria === "CAMIONETA";
-    if (["BATEA", "CAMA_BAJA"].includes(e.categoria)) return { salud: "OK" };
+    if (["BATEA", "CAMA_BAJA"].includes(e.categoria)) return { salud: "OK", estPrev: "OK", estGen: "OK" };
 
     const cat = CATEGORIES.find(c=>c.id===e.categoria);
     const prevCada = Number(e.preventivaCada ?? cat?.defaultPreventive ?? 250);
     const genCada = Number(e.generalCada || 2000);
     
-    // VALIDACIÓN DE DATOS (Punto 3 modificado por Ignacio)
-    if (!e.horaActual || e.horaActual === 0 || !e.horaActualFecha) return { salud: "⚠️ INGRESAR LECTURA", proxPrev: 0, proxGen: 0 };
-    if (!e.ultimaPreventivaHora || e.ultimaPreventivaHora === 0) return { salud: "⚙️ CONFIG. PREV", proxPrev: 0, proxGen: 0 };
-    if (!e.ultimaGeneralHora || e.ultimaGeneralHora === 0) return { salud: "🛠️ CONFIG. GEN", proxPrev: 0, proxGen: 0 };
+    // Lógica de errores individuales
+    let estPrev = "OK", estGen = "OK";
+    const prontoLim = esCamioneta ? 1000 : 120;
+    const urgenteLim = esCamioneta ? 500 : 40;
 
+    // Cálculo de hora actual proyectada
     const elapsed = e.horaActualFecha ? (e.horasDiariasOverride > 0 ? daysBetween(e.horaActualFecha, todayISO()) * e.horasDiariasOverride : workingHoursBetween(e.horaActualFecha, todayISO())) : 0;
     const horaActual = Number(e.horaActual||0) + Math.max(0, elapsed);
-    const proxPrev = (Number(e.ultimaPreventivaHora||0) + prevCada);
-    const proxGen = (Number(e.ultimaGeneralHora||0) + genCada);
-    const restPrev = proxPrev - horaActual;
-    const restGen = proxGen - horaActual;
-    
-    const prontoThreshold = esCamioneta ? 1000 : 120;
-    const urgenteThreshold = esCamioneta ? 500 : 40;
 
-    const getEst = (r) => {
-      if (r <= 0) return "VENCIDA";
-      if (r <= urgenteThreshold) return "URGENTE";
-      if (r <= prontoThreshold) return "PRONTO";
-      return "OK";
+    // Validación Preventiva
+    if (!e.horaActual || e.horaActual === 0) { estPrev = "⚠️ LECTURA"; estGen = "⚠️ LECTURA"; }
+    else if (!e.ultimaPreventivaHora || e.ultimaPreventivaHora === 0) { estPrev = "⚙️ PREV"; }
+    else {
+      const prox = Number(e.ultimaPreventivaHora) + prevCada;
+      const rest = prox - horaActual;
+      if (rest <= 0) estPrev = "VENCIDA";
+      else if (rest <= urgenteLim) estPrev = "URGENTE";
+      else if (rest <= prontoLim) estPrev = "PRONTO";
+    }
+
+    // Validación General
+    if (estGen !== "⚠️ LECTURA") {
+      if (!e.ultimaGeneralHora || e.ultimaGeneralHora === 0) { estGen = "🛠️ GEN"; }
+      else {
+        const prox = Number(e.ultimaGeneralHora) + genCada;
+        const rest = prox - horaActual;
+        if (rest <= 0) estGen = "VENCIDA";
+        else if (rest <= urgenteLim) estGen = "URGENTE";
+        else if (rest <= prontoLim) estGen = "PRONTO";
+      }
+    }
+
+    const priority = { VENCIDA: 6, URGENTE: 5, "⚠️ LECTURA": 4, "⚙️ PREV": 3, "🛠️ GEN": 2, PRONTO: 1, OK: 0 };
+    const worst = priority[estPrev] >= priority[estGen] ? estPrev : estGen;
+
+    return { 
+      horaActual, 
+      proxPrev: (Number(e.ultimaPreventivaHora||0) + prevCada), 
+      proxGen: (Number(e.ultimaGeneralHora||0) + genCada), 
+      restPrev: ((Number(e.ultimaPreventivaHora||0) + prevCada) - horaActual),
+      restGen: ((Number(e.ultimaGeneralHora||0) + genCada) - horaActual),
+      estPrev, estGen, salud: worst 
     };
-
-    const sP = getEst(restPrev);
-    const sG = getEst(restGen);
-    const priority = { VENCIDA: 4, URGENTE: 3, PRONTO: 2, OK: 1 };
-    const worst = priority[sP] > priority[sG] ? sP : sG;
-
-    return { horaActual, proxPrev, proxGen, restPrev, restGen, salud: worst };
   }, []);
 
   if (!view.cat) {
     return (
       <div className="p-6 max-w-6xl mx-auto min-h-screen bg-slate-50 font-sans text-slate-900 text-left">
-        <header className="mb-10 flex justify-between items-end border-b pb-6 border-slate-200">
-          <div><h1 className="text-5xl font-black tracking-tighter uppercase italic text-slate-900 leading-none">VIA 5</h1><p className="font-bold text-blue-600 uppercase text-[10px] tracking-widest">SISTEMAS OPERATIVOS EFESA</p></div>
+        <header className="mb-10 flex justify-between items-end border-b-4 border-slate-200 pb-6">
+          <div><h1 className="text-5xl font-black tracking-tighter uppercase italic text-slate-900 leading-none">VIA 5</h1><p className="font-black text-blue-600 uppercase text-[10px] tracking-widest mt-2">GESTIÓN EFESA INGENIERIA</p></div>
         </header>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {CATEGORIES.map(c => {
             const unidades = equipos.filter(e => e.categoria === c.id);
             const statusList = unidades.map(e => calcularEstado(e).salud);
-            const esCritico = statusList.some(s => s === "VENCIDA" || s === "URGENTE");
-            const esFalta = statusList.some(s => s.includes("INGRESAR") || s.includes("CONFIG"));
+            const esCritico = statusList.some(s => ["VENCIDA","URGENTE"].includes(s));
+            const esFalta = statusList.some(s => s.includes("LECTURA") || s.includes("PREV") || s.includes("GEN"));
             return (
-              <Card key={c.id} onClick={() => setView({ cat: c.id, id: null })} className="p-8 group hover:border-blue-500 shadow-sm transition-all duration-300">
+              <Card key={c.id} onClick={() => setView({ cat: c.id, id: null })} className="p-8 group hover:border-blue-500 shadow-sm transition-all duration-300 border-2 border-transparent">
                 <div className="flex justify-between items-start mb-6">
                   <span className="text-7xl group-hover:scale-110 transition-transform duration-300">{c.icon}</span>
-                  {unidades.length > 0 && (
-                    <span className={`px-3 py-1 rounded-full text-[10px] font-black ${esCritico ? 'bg-red-600 text-white animate-pulse' : (esFalta ? 'bg-slate-400 text-white' : 'bg-slate-900 text-white')}`}>
-                      {unidades.length} UNIDS
-                    </span>
-                  )}
+                  {unidades.length > 0 && <span className={`px-3 py-1 rounded-full text-[10px] font-black ${esCritico ? 'bg-red-600 text-white animate-pulse' : (esFalta ? 'bg-slate-900 text-white' : 'bg-slate-200 text-slate-900')}`}>{unidades.length} UNIDS</span>}
                 </div>
-                <h3 className="text-xl font-black text-slate-800 uppercase italic leading-none">{c.label}</h3>
+                <h3 className="text-xl font-black text-slate-900 uppercase italic leading-none">{c.label}</h3>
               </Card>
             );
           })}
@@ -416,21 +393,21 @@ export default function AppMantenciones(){
     return (
       <div className="p-6 max-w-6xl mx-auto min-h-screen text-left">
         <div className="flex items-center gap-4 mb-10 text-slate-900">
-          <Button variant="secondary" onClick={() => setView({ cat: null, id: null })} className="rounded-full w-12 h-12 p-0 text-xl font-black shadow-md">←</Button>
+          <Button variant="secondary" onClick={() => setView({ cat: null, id: null })} className="rounded-full w-12 h-12 p-0 text-xl font-black">←</Button>
           <h2 className="text-4xl font-black uppercase italic tracking-tighter">{cat.icon} {cat.label}</h2>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
           {equipos.filter(e => e.categoria === view.cat).map(e => (
-            <Card key={e.id} onClick={() => setView({ ...view, id: e.id })} className="p-6 border-l-[16px] border-l-blue-600 shadow-md">
-              <div className="font-black text-2xl mb-1 text-slate-800 tracking-tighter uppercase">{e.patente || "S/P"}</div>
-              <div className="text-[10px] font-bold text-slate-400 mb-6 uppercase tracking-widest">{e.marca || "No definida"}</div>
-              <EstadoBadge estado={calcularEstado(e).salud} />
+            <Card key={e.id} onClick={() => setView({ ...view, id: e.id })} className="p-6 border-l-[16px] border-l-blue-600 shadow-md hover:shadow-lg transition-all border-slate-200">
+              <div className="font-black text-2xl mb-1 text-slate-900 tracking-tighter uppercase">{e.patente || "S/P"}</div>
+              <div className="text-[10px] font-black text-slate-400 mb-6 uppercase tracking-widest">{e.marca || "No definida"}</div>
+              <div className="text-left"><EstadoBadge estado={calcularEstado(e).salud} /></div>
             </Card>
           ))}
           <button onClick={() => {
             const base = { categoria: view.cat, marca:"", patente:"", horaActual:0, horaActualFecha: todayISO(), ultimaPreventivaHora:0, ultimaGeneralHora:0, insumosPrev: [], insumosGen: [], documentos: [], notas: "", updatedAt: serverTimestamp() };
             addDoc(collection(db,"equipos"), base).then(d => setView({...view, id: d.id}));
-          }} className="border-4 border-dashed rounded-3xl p-6 flex flex-col items-center justify-center text-slate-300 hover:text-blue-600 hover:border-blue-600 transition-all font-black uppercase text-xl">+ NUEVO</button>
+          }} className="border-4 border-dashed border-slate-200 rounded-3xl p-6 flex flex-col items-center justify-center text-slate-300 hover:text-blue-600 hover:border-blue-600 transition-all font-black uppercase text-xl">+ NUEVO</button>
         </div>
       </div>
     );
@@ -439,14 +416,14 @@ export default function AppMantenciones(){
   const equipoActual = equipos.find(x => x.id === view.id);
   return (
     <div className="p-6 max-w-7xl mx-auto min-h-screen bg-slate-50 text-slate-900 text-left">
-      <div className="mb-8 flex justify-between items-center bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
-        <Button variant="secondary" onClick={() => setView({ ...view, id: null })} className="uppercase italic tracking-tighter font-black shadow-sm">← Listado de Flota</Button>
+      <div className="mb-8 flex justify-between items-center bg-white p-6 rounded-3xl shadow-sm border-2 border-slate-100">
+        <Button variant="secondary" onClick={() => setView({ ...view, id: null })}>← Listado de Flota</Button>
         <div className="text-right">
-          <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest leading-none">EXPEDIENTE DE ACTIVO</p>
+          <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest">EXPEDIENTE DE EQUIPO</p>
           <h2 className="text-3xl font-black text-slate-900 italic uppercase tracking-tighter leading-none">{equipoActual?.patente || "NUEVO"}</h2>
         </div>
       </div>
-      {equipoActual && <RowEditor e={equipoActual} calcularEstado={calcularEstado} updateEquipo={(id, p) => updateDoc(doc(db, "equipos", id), { ...p, updatedAt: serverTimestamp() })} removeEquipo={(id) => { if(window.confirm("¿Eliminar?")) { deleteDoc(doc(db,"equipos",id)); setView({...view, id: null}); } }} />}
+      {equipoActual && <RowEditor e={equipoActual} calcularEstado={calcularEstado} updateEquipo={(id, p) => updateDoc(doc(db, "equipos", id), { ...p, updatedAt: serverTimestamp() })} removeEquipo={(id) => { if(window.confirm("¿Eliminar este equipo permanentemente?")) { deleteDoc(doc(db,"equipos",id)); setView({...view, id: null}); } }} />}
     </div>
   );
 }
