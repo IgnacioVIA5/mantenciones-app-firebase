@@ -22,7 +22,6 @@ const db = getFirestore(app);
 const storage = getStorage(app);
 async function ensureAnonAuth(){ if(!auth.currentUser) await signInAnonymously(auth); return auth.currentUser; }
 
-/* =================== CONFIGURACIÓN DE FLOTA =================== */
 const CATEGORIES = [
   { id: "CARGADOR",   label: "Cargadores Frontales", icon: "🚜", defaultPreventive: 200 },
   { id: "CAMION",      label: "Camiones Tolva",      icon: "🚛", defaultPreventive: 300 },
@@ -44,7 +43,7 @@ const BRAND_OPTIONS = {
 };
 
 function platesFor(categoria, marca){
-  if (marca === "Mack") return ["DFLW-71", "DRHK-42", "DHXR-54", "WY-8717"]; // DHXR-54 CORREGIDA (Punto 6)
+  if (marca === "Mack") return ["DFLW-71", "DRHK-42", "DHXR-54", "WY-8717"]; 
   if (marca === "Volkswagen") return ["RHGC-83", "RKSC-25"];
   if (marca === "Renault") return ["SW-6114"];
   if (marca === "Komatsu") return ["SDTP-59"];
@@ -62,12 +61,10 @@ function platesFor(categoria, marca){
 
 const OPERATORS = ["Eligio Miranda", "Patricio Obando", "Salomón Fernández", "Segundo Gómez", "Fernando Gueicha", "Francisco Bahamonde", "Pedro Espinoza", "Cecilia Sandoval", "Ignacio Echeverría"];
 
-/* ======================== UTILIDADES ======================== */
 function fmt(n,dec=0){ if(n===null||n===undefined||Number.isNaN(+n)) return "—"; return Number(n).toLocaleString("es-CL",{minimumFractionDigits:dec,maximumFractionDigits:dec}); }
 const todayISO = ()=>{ const d=new Date(); d.setHours(0,0,0,0); const p=n=>String(n).padStart(2,"0"); return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`; };
 function parseISO(d){ if(!d) return null; const [y,m,da]=String(d).split("-").map(Number); if(!y||!m||!da) return null; const dt=new Date(y,m-1,da); return Number.isNaN(dt.getTime())?null:dt; }
 function daysBetween(a,b){ const A=parseISO(a); const B=parseISO(b||todayISO()); if(!A||!B) return 0; const ms=B.setHours(0,0,0,0)-A.setHours(0,0,0,0); return Math.round(ms/86400000); }
-
 const WORK_SCHEDULE = { 1:9, 2:9, 3:9, 4:9, 5:8, 6:0, 0:0 };
 function workingHoursBetween(a,b){
   const A=parseISO(a); const B=parseISO(b||todayISO()); if(!A||!B) return 0;
@@ -86,10 +83,192 @@ const Button = ({children, className="", variant="primary", ...p})=> {
   let styles = variant === "primary" ? "bg-blue-600 text-white hover:bg-blue-700" : (variant === "secondary" ? "bg-white border border-gray-200 text-gray-700 hover:bg-gray-50" : "bg-red-50 text-red-600 border border-red-100 hover:bg-red-100");
   return <button className={`${base} ${styles} ${className}`} {...p}>{children}</button>;
 };
+
 const EstadoBadge = ({ estado }) => {
-  const map = { VENCIDA:"bg-red-600 text-white", URGENTE:"bg-orange-500 text-white", PRONTO:"bg-yellow-400 text-black", OK:"bg-emerald-600 text-white", "FALTA INFORMACIÓN": "bg-slate-400 text-white" };
-  return <span className={`px-2 py-0.5 rounded-lg text-[10px] font-black uppercase ${map[estado] || "bg-gray-200 text-gray-600"}`}>{estado}</span>;
+  const map = { 
+    VENCIDA:"bg-red-600 text-white", 
+    URGENTE:"bg-orange-500 text-white", 
+    PRONTO:"bg-yellow-400 text-black", 
+    OK:"bg-emerald-600 text-white" 
+  };
+  
+  const isErrorStatus = estado && (estado.includes("INGRESAR") || estado.includes("CONFIG"));
+  const style = isErrorStatus ? "bg-slate-400 text-white border border-slate-500" : (map[estado] || "bg-gray-200 text-gray-600");
+  
+  return <span className={`px-2 py-0.5 rounded-lg text-[10px] font-black uppercase shadow-sm ${style}`}>{estado}</span>;
 };
+
+/* =================== EDITOR DE EQUIPO =================== */
+const RowEditor = memo(function RowEditor({ e, calcularEstado, updateEquipo, removeEquipo }){
+  const s = calcularEstado(e);
+  const cat = CATEGORIES.find(c=>c.id===e.categoria);
+  const upd = (p) => updateEquipo(e.id, p);
+  
+  const esCamioneta = e.categoria === "CAMIONETA";
+  const esCamion = e.categoria === "CAMION";
+  const esBateaOCama = ["BATEA", "CAMA_BAJA"].includes(e.categoria);
+  const sinLegal = ["CARGADOR", "EXCAVADORA", "GENERADOR"].includes(e.categoria);
+  
+  const labelMain = esCamioneta ? "Odómetro" : "Horómetro";
+  const unit = esCamioneta ? "km" : "h";
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 animate-in fade-in duration-500">
+      <div className="lg:col-span-3 space-y-6">
+        <Card className="p-6">
+          {/* Identificación */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <div><Label>Marca</Label>
+              <select className="w-full text-sm border rounded-xl p-2 bg-gray-50 font-bold text-slate-900" value={e.marca} onChange={v=>upd({marca:v.target.value, patente:""})}>
+                <option value="">—</option>
+                {(BRAND_OPTIONS[e.categoria]||[]).map(m=><option key={m}>{m}</option>)}
+              </select>
+            </div>
+            <div><Label>Patente</Label>
+              <select className="w-full text-sm border rounded-xl p-2 bg-gray-50 font-black text-blue-700 uppercase" value={e.patente} onChange={v=>upd({patente:v.target.value})}>
+                <option value="">—</option>
+                {platesFor(e.categoria, e.marca).map(p=><option key={p}>{p}</option>)}
+              </select>
+            </div>
+            <div><Label>Operador Responsable</Label>
+              <select className="w-full text-sm border rounded-xl p-2 bg-gray-50 font-bold text-slate-900" value={e.operador} onChange={v=>upd({operador:v.target.value})}>
+                <option value="">—</option>
+                {OPERATORS.map(o=><option key={o}>{o}</option>)}
+              </select>
+            </div>
+          </div>
+
+          {/* RECUADRO AZUL DESTACADO PARA TODOS LOS EQUIPOS (Excepto Bateas) */}
+          {!esBateaOCama && (
+            <div className="mb-8 p-6 bg-gradient-to-br from-blue-600 to-blue-700 rounded-3xl shadow-xl border-b-4 border-blue-900">
+               <div className="flex items-center gap-2 mb-4 justify-center">
+                 <span className="text-xl">📍</span>
+                 <h4 className="text-xs font-black text-blue-100 uppercase tracking-[0.2em] italic">Registro de Lectura Actual</h4>
+               </div>
+               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <Label className="text-blue-100 opacity-80 mb-2">Lectura {labelMain} ({unit})</Label>
+                    <input 
+                      type="number" 
+                      className="w-full px-5 py-4 rounded-2xl bg-white text-blue-900 font-black text-2xl focus:ring-4 focus:ring-blue-300 outline-none transition-all shadow-inner" 
+                      placeholder="0.0"
+                      value={e.horaActual || ""} 
+                      onChange={v=>upd({horaActual:Number(v.target.value)})}
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-blue-100 opacity-80 mb-2">Fecha de Toma</Label>
+                    <input 
+                      type="date" 
+                      className="w-full px-5 py-4 rounded-2xl bg-white text-blue-900 font-bold text-lg focus:ring-4 focus:ring-blue-300 outline-none transition-all shadow-inner" 
+                      value={e.horaActualFecha || ""} 
+                      onChange={v=>upd({horaActualFecha: v.target.value})}
+                    />
+                  </div>
+               </div>
+            </div>
+          )}
+
+          {/* Registro Dual para Camiones */}
+          {esCamion && (
+            <div className="mb-8 p-6 bg-slate-800 rounded-3xl shadow-lg border-b-4 border-slate-950">
+               <div className="flex items-center gap-2 mb-4">
+                 <span className="text-lg">🛣️</span>
+                 <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest italic">Registro Complementario: Odómetro (km)</h4>
+               </div>
+               <div className="grid grid-cols-2 gap-6">
+                  <div className="relative">
+                    <input type="number" className="w-full px-4 py-3 rounded-xl bg-slate-700 text-white font-black text-xl outline-none" placeholder="Km actual..." value={e.odometro || ""} onChange={v=>upd({odometro: Number(v.target.value)})}/>
+                  </div>
+                  <div className="relative">
+                    <input type="date" className="w-full px-4 py-3 rounded-xl bg-slate-700 text-white font-bold outline-none" value={e.odometroFecha || ""} onChange={v=>upd({odometroFecha: v.target.value})}/>
+                  </div>
+               </div>
+            </div>
+          )}
+
+          {/* Parámetros Técnicos */}
+          {!esBateaOCama && (
+            <>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6 text-slate-900">
+                <div><Label>Plan Prev cada ({unit})</Label><Input type="number" placeholder={cat?.defaultPreventive} value={e.preventivaCada || ""} onChange={v=>upd({preventivaCada: Number(v.target.value)})}/></div>
+                <div><Label>Plan Gen cada ({unit})</Label><Input type="number" value={e.generalCada || 2000} onChange={v=>upd({generalCada:Number(v.target.value)})}/></div>
+                <div><Label>{esCamioneta ? "Km" : "Horas"} Diarias</Label><Input type="number" placeholder="Opcional" value={e.horasDiariasOverride || ""} onChange={v=>upd({horasDiariasOverride: Number(v.target.value)})}/></div>
+                <div className="flex flex-col justify-end text-[9px] text-slate-400 font-bold italic uppercase leading-tight">Configuración del Plan de Mantenimiento</div>
+              </div>
+
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6 text-slate-900">
+                <div><Label>Última Prev Realizada</Label><Input type="number" value={e.ultimaPreventivaHora || ""} onChange={v=>upd({ultimaPreventivaHora:Number(v.target.value)})}/></div>
+                <div><Label>Última Gen Realizada</Label><Input type="number" value={e.ultimaGeneralHora || ""} onChange={v=>upd({ultimaGeneralHora:Number(v.target.value)})}/></div>
+                {!sinLegal ? (
+                  <>
+                    <div><Label>Vence RT</Label><Input type="date" value={e.rtUltima || ""} onChange={v=>upd({rtUltima:v.target.value})}/></div>
+                    <div><Label>Vence PC</Label><Input type="date" value={e.pcUltimo || ""} onChange={v=>upd({pcUltimo:v.target.value})}/></div>
+                  </>
+                ) : <div className="md:col-span-2"></div>}
+              </div>
+            </>
+          )}
+
+          {/* Legal para Bateas */}
+          {esBateaOCama && (
+            <div className="grid grid-cols-2 gap-4 mb-6">
+              <div><Label>Vence Revisión Técnica</Label><Input type="date" value={e.rtUltima || ""} onChange={v=>upd({rtUltima:v.target.value})}/></div>
+              <div><Label>Vence Permiso de Circulación</Label><Input type="date" value={e.pcUltimo || ""} onChange={v=>upd({pcUltimo:v.target.value})}/></div>
+            </div>
+          )}
+
+          <div className="mb-6"><Label>Notas Técnicas</Label><textarea className="w-full px-3 py-2 rounded-xl border bg-gray-50 focus:bg-white text-sm h-16 text-slate-900" value={e.notas || ""} onChange={v=>upd({notas:v.target.value})} placeholder="Detalles de fallas, reparaciones..."/></div>
+
+          {!esBateaOCama && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <InsumosTable title="Insumos Preventiva" value={e.insumosPrev} onChange={v=>upd({insumosPrev:v})}/>
+              <InsumosTable title="Insumos General" value={e.insumosGen} onChange={v=>upd({insumosGen:v})}/>
+            </div>
+          )}
+        </Card>
+      </div>
+
+      {/* PANEL DE CONTROL DERECHO */}
+      <div className="space-y-4">
+        {!esBateaOCama ? (
+          <Card className="p-6 bg-white border-2 border-slate-100 shadow-xl text-slate-900">
+            <h4 className="text-[11px] font-black uppercase tracking-widest mb-6 text-slate-400 italic text-center">Estatus de Ciclo</h4>
+            <div className="space-y-8">
+              <div>
+                <div className="flex justify-between items-center mb-1"><span className="text-[10px] font-bold uppercase text-slate-500">Próx. Preventiva</span><EstadoBadge estado={s.salud} /></div>
+                <p className="text-3xl font-black italic tracking-tighter text-slate-900 leading-none">
+                  {s.salud.includes("INGRESAR") || s.salud.includes("CONFIG") ? "—" : `${fmt(s.proxPrev)} ${unit}`}
+                </p>
+                {!s.salud.includes("INGRESAR") && !s.salud.includes("CONFIG") && (
+                   <p className="text-[11px] font-bold text-blue-600 mt-1 uppercase">Restan: {fmt(s.restPrev)} {unit}</p>
+                )}
+                <button onClick={()=>{if(window.confirm(`¿Registrar realización?`)) upd({ultimaPreventivaHora: s.horaActual})}} className="w-full mt-4 bg-white text-slate-900 py-3 rounded-xl font-black text-xs uppercase tracking-tighter hover:bg-emerald-50 shadow-md border border-slate-100 transition-all">Registrar Prev.</button>
+              </div>
+              <div className="border-t border-slate-100 pt-6">
+                <div className="flex justify-between items-center mb-1"><span className="text-[10px] font-bold uppercase text-slate-500">Próx. General</span></div>
+                <p className="text-3xl font-black italic tracking-tighter text-slate-900 leading-none">
+                  {s.salud.includes("INGRESAR") || s.salud.includes("CONFIG") ? "—" : `${fmt(s.proxGen)} ${unit}`}
+                </p>
+                <button onClick={()=>{if(window.confirm(`¿Registrar realización?`)) upd({ultimaGeneralHora: s.horaActual})}} className="w-full mt-4 bg-white text-slate-900 py-3 rounded-xl font-black text-xs uppercase tracking-tighter hover:bg-blue-50 shadow-md border border-slate-100 transition-all">Registrar Gen.</button>
+              </div>
+            </div>
+          </Card>
+        ) : (
+          <Card className="p-6 bg-slate-900 text-white shadow-xl">
+             <h4 className="text-[10px] font-black uppercase text-slate-400 mb-6 tracking-widest text-center">Estatus Legal</h4>
+             <div className="space-y-6">
+                <div><Label className="text-slate-400">R. Técnica</Label><EstadoBadge estado={estadoPorDias(daysBetween(todayISO(), addYears(e.rtUltima || todayISO(), 1)), 30)} /></div>
+                <div><Label className="text-slate-400">P. Circulación</Label><EstadoBadge estado={estadoPorDias(daysBetween(todayISO(), addYears(e.pcUltimo || todayISO(), 1)), 30)} /></div>
+             </div>
+          </Card>
+        )}
+        <DocumentManager equipoId={e.id} docs={e.documentos || []} onUpdate={v => upd({documentos: v})} />
+        <Button variant="danger" className="w-full py-3 uppercase tracking-tighter font-black opacity-60 hover:opacity-100 transition-all" onClick={()=>removeEquipo(e.id)}>Dar de Baja Activo</Button>
+      </div>
+    </div>
+  );
+});
 
 /* =================== TABLAS E INSUMOS =================== */
 function InsumosTable({ title, value = [], onChange }){
@@ -98,28 +277,19 @@ function InsumosTable({ title, value = [], onChange }){
     <div className="bg-white border rounded-2xl p-4 shadow-sm text-slate-900">
       <div className="flex justify-between items-center mb-4">
         <h4 className="font-black text-xs uppercase tracking-wider">{title}</h4>
-        <Button onClick={add} variant="secondary" className="h-7 text-[10px] px-2 shadow-sm">+ ITEM</Button>
+        <Button onClick={add} variant="secondary" className="h-7 text-[10px] shadow-sm tracking-tight">+ ITEM</Button>
       </div>
       <div className="space-y-2">
-        {value.map((r, i) => {
-          const unit = r.tipo === "Aceite" ? "L" : (r.tipo === "Filtro" ? "un" : "—");
-          return (
-            <div key={i} className="flex flex-wrap md:flex-nowrap gap-2 items-center border-b border-gray-50 pb-2 last:border-0">
-              <select className="text-xs border rounded-lg p-1.5 bg-gray-50" value={r.tipo} onChange={e=>onChange(value.map((x,idx)=>idx===i?{...x, tipo:e.target.value}:x))}>
-                <option>Filtro</option><option>Aceite</option><option>Otro</option>
-              </select>
-              <input className="text-xs border rounded-lg p-1.5 flex-1 min-w-[120px]" placeholder="Nombre..." value={r.nombre} onChange={e=>onChange(value.map((x,idx)=>idx===i?{...x, nombre:e.target.value}:x))} />
-              <div className="flex items-center gap-1">
-                <input type="number" className="text-xs border rounded-lg p-1.5 w-14 font-bold" value={r.cant} onChange={e=>onChange(value.map((x,idx)=>idx===i?{...x, cant:Number(e.target.value)}:x))} />
-                <span className="text-[10px] font-bold text-gray-400 w-4">{unit}</span>
-              </div>
-              <label className="flex items-center gap-1 text-[10px] font-black text-gray-400 uppercase">
-                <input type="checkbox" checked={r.enBodega} onChange={e=>onChange(value.map((x,idx)=>idx===i?{...x, enBodega:e.target.checked}:x))} /> BOD
-              </label>
-              <button onClick={()=>onChange(value.filter((_,idx)=>idx!==i))} className="text-red-400 hover:text-red-600 px-1 font-bold">✕</button>
-            </div>
-          );
-        })}
+        {value.map((r, i) => (
+          <div key={i} className="flex flex-wrap md:flex-nowrap gap-2 items-center border-b border-gray-50 pb-2 last:border-0">
+            <select className="text-[10px] border rounded bg-gray-50 font-bold p-1" value={r.tipo} onChange={e=>onChange(value.map((x,idx)=>idx===i?{...x, tipo:e.target.value}:x))}>
+              <option>Filtro</option><option>Aceite</option><option>Otro</option>
+            </select>
+            <input className="text-[10px] border rounded flex-1 p-1" placeholder="Nombre..." value={r.nombre} onChange={e=>onChange(value.map((x,idx)=>idx===i?{...x, nombre:e.target.value}:x))} />
+            <input type="number" className="text-[10px] border rounded w-10 p-1 font-bold" value={r.cant} onChange={e=>onChange(value.map((x,idx)=>idx===i?{...x, cant:Number(e.target.value)}:x))} />
+            <button onClick={()=>onChange(value.filter((_,idx)=>idx!==i))} className="text-red-400 font-bold px-1">✕</button>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -140,17 +310,17 @@ function DocumentManager({ equipoId, docs = [], onUpdate }){
   };
   return (
     <div className="bg-gray-50 rounded-2xl p-4 border border-dashed border-gray-300">
-      <div className="flex justify-between items-center mb-3 text-slate-900">
-        <h4 className="font-bold text-xs uppercase">Documentos</h4>
-        <label className="cursor-pointer bg-blue-600 text-white px-3 py-1 rounded-lg text-[10px] font-black hover:bg-blue-700 uppercase transition-all shadow-md">
+      <div className="flex justify-between items-center mb-3">
+        <h4 className="font-bold text-[10px] uppercase text-slate-400">Documentos</h4>
+        <label className="cursor-pointer bg-blue-600 text-white px-2 py-1 rounded text-[9px] font-black hover:bg-blue-700 uppercase transition-all">
           {uploading ? "..." : "+ Subir"}
           <input type="file" className="hidden" onChange={handleUpload} disabled={uploading} />
         </label>
       </div>
-      <div className="grid grid-cols-1 gap-2">
+      <div className="space-y-1">
         {docs.map((d, i) => (
-          <div key={i} className="flex items-center justify-between bg-white p-2 rounded-lg border text-[10px] text-slate-900">
-            <a href={d.url} target="_blank" rel="noreferrer" className="text-blue-600 font-bold truncate flex-1 underline">📄 {d.name}</a>
+          <div key={i} className="flex items-center justify-between bg-white p-1.5 rounded border text-[9px]">
+            <a href={d.url} target="_blank" rel="noreferrer" className="text-blue-600 font-bold truncate flex-1 underline">{d.name}</a>
             <button onClick={async () => { if(window.confirm("¿Eliminar?")){ await deleteObject(ref(storage, d.path)); onUpdate(docs.filter((_, idx)=>idx!==i)); } }} className="text-red-400 ml-2 font-bold">✕</button>
           </div>
         ))}
@@ -158,168 +328,6 @@ function DocumentManager({ equipoId, docs = [], onUpdate }){
     </div>
   );
 }
-
-/* =================== EDITOR DE EQUIPO =================== */
-const RowEditor = memo(function RowEditor({ e, calcularEstado, updateEquipo, removeEquipo }){
-  const s = calcularEstado(e);
-  const cat = CATEGORIES.find(c=>c.id===e.categoria);
-  const upd = (p) => updateEquipo(e.id, p);
-
-  const esCamioneta = e.categoria === "CAMIONETA";
-  const esCamion = e.categoria === "CAMION";
-  const esBateaOCama = ["BATEA", "CAMA_BAJA"].includes(e.categoria);
-  const sinDocumentos = ["CARGADOR", "EXCAVADORA"].includes(e.categoria); // Punto 2
-  
-  const unit = esCamioneta ? "km" : "h";
-  const labelMain = esCamioneta ? "Odómetro" : "Horómetro";
-
-  return (
-    <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 animate-in fade-in duration-500">
-      <div className="lg:col-span-3 space-y-6">
-        <Card className="p-6">
-          {/* Fila 1: ID */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-            <div><Label>Marca</Label>
-              <select className="w-full text-sm border rounded-xl p-2 bg-gray-50 font-bold text-slate-900" value={e.marca} onChange={v=>upd({marca:v.target.value, patente:""})}>
-                <option value="">—</option>
-                {(BRAND_OPTIONS[e.categoria]||[]).map(m=><option key={m}>{m}</option>)}
-              </select>
-            </div>
-            <div><Label>Patente</Label>
-              <select className="w-full text-sm border rounded-xl p-2 bg-gray-50 font-black text-blue-700 uppercase" value={e.patente} onChange={v=>upd({patente:v.target.value})}>
-                <option value="">—</option>
-                {platesFor(e.categoria, e.marca).map(p=><option key={p}>{p}</option>)}
-              </select>
-            </div>
-            <div><Label>Operador</Label>
-              <select className="w-full text-sm border rounded-xl p-2 bg-gray-50 font-bold text-slate-900" value={e.operador} onChange={v=>upd({operador:v.target.value})}>
-                <option value="">—</option>
-                {OPERATORS.map(o=><option key={o}>{o}</option>)}
-              </select>
-            </div>
-          </div>
-
-          {/* Fila 2 & 3: Métricas (Solo si no es Batea) - Punto 7 */}
-          {!esBateaOCama && (
-            <>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6 text-slate-900">
-                <div><Label>{labelMain} Actual ({unit})</Label><Input type="number" value={e.horaActual} onChange={v=>upd({horaActual:Number(v.target.value)})}/></div>
-                <div><Label>Fecha Lectura</Label><Input type="date" value={e.horaActualFecha} onChange={v=>upd({horaActualFecha:v.target.value})}/></div>
-                <div><Label>Prev cada ({unit})</Label><Input type="number" placeholder={cat?.defaultPreventive} value={e.preventivaCada || ""} onChange={v=>upd({preventivaCada: Number(v.target.value)})}/></div>
-                <div><Label>Gen cada ({unit})</Label><Input type="number" value={e.generalCada || 2000} onChange={v=>upd({generalCada:Number(v.target.value)})}/></div>
-              </div>
-
-              <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6 text-slate-900">
-                <div><Label>{esCamioneta ? "Km Diarios" : "Horas Diarias"}</Label><Input type="number" placeholder="Proyectado" value={e.horasDiariasOverride || ""} onChange={v=>upd({horasDiariasOverride: Number(v.target.value)})}/></div>
-                <div><Label>Última Prev ({unit})</Label><Input type="number" value={e.ultimaPreventivaHora || 0} onChange={v=>upd({ultimaPreventivaHora:Number(v.target.value)})}/></div>
-                <div><Label>Última Gen ({unit})</Label><Input type="number" value={e.ultimaGeneralHora || 0} onChange={v=>upd({ultimaGeneralHora:Number(v.target.value)})}/></div>
-                
-                {!sinDocumentos ? ( // Punto 2
-                  <>
-                    <div><Label>Vence RT</Label><Input type="date" value={e.rtUltima || ""} onChange={v=>upd({rtUltima:v.target.value})}/></div>
-                    <div><Label>Vence PC</Label><Input type="date" value={e.pcUltimo || ""} onChange={v=>upd({pcUltimo:v.target.value})}/></div>
-                  </>
-                ) : <div className="md:col-span-2"></div>}
-              </div>
-            </>
-          )}
-
-          {/* Registro Dual Camiones - Punto 5 */}
-          {esCamion && (
-            <div className="mb-6 p-4 bg-blue-50 rounded-2xl border border-blue-100">
-               <h4 className="text-[10px] font-black text-blue-800 uppercase mb-3 italic">Registro Dual: Odómetro (km)</h4>
-               <div className="grid grid-cols-2 gap-4">
-                  <div><Label className="text-blue-700">Odómetro Actual</Label><Input type="number" value={e.odometro || ""} onChange={v=>upd({odometro: Number(v.target.value)})}/></div>
-                  <div><Label className="text-blue-700">Fecha Odómetro</Label><Input type="date" value={e.odometroFecha || ""} onChange={v=>upd({odometroFecha: v.target.value})}/></div>
-               </div>
-            </div>
-          )}
-
-          {/* Bateas RT/PC Simplificado - Punto 7 */}
-          {esBateaOCama && (
-            <div className="grid grid-cols-2 gap-4 mb-6 text-slate-900">
-              <div><Label>Vence Revisión Técnica</Label><Input type="date" value={e.rtUltima || ""} onChange={v=>upd({rtUltima:v.target.value})}/></div>
-              <div><Label>Vence Permiso de Circulación</Label><Input type="date" value={e.pcUltimo || ""} onChange={v=>upd({pcUltimo:v.target.value})}/></div>
-            </div>
-          )}
-
-          {/* Fila 4: Notas - Siempre Visible */}
-          <div className="mb-6 text-slate-900">
-            <Label>Notas y Observaciones</Label>
-            <textarea className="w-full px-3 py-2 rounded-xl border bg-gray-50 focus:bg-white text-sm h-16" value={e.notas || ""} onChange={v=>upd({notas:v.target.value})} placeholder="Detalles de fallas, reparaciones..."/>
-          </div>
-
-          {/* Fila 5 & 6: Insumos (Ocultos para Bateas) */}
-          {!esBateaOCama && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-              <InsumosTable title="Insumos Preventiva" value={e.insumosPrev} onChange={v=>upd({insumosPrev:v})}/>
-              <InsumosTable title="Insumos General" value={e.insumosGen} onChange={v=>upd({insumosGen:v})}/>
-            </div>
-          )}
-
-          {/* AdBlue VW */}
-          {(e.categoria === "CAMION" && e.marca === "Volkswagen") && (
-            <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-100 text-emerald-900">
-              <h4 className="text-xs font-black uppercase mb-3">Registro AdBlue (Exclusivo VW)</h4>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div><Label className="text-emerald-700">Carga (L)</Label><Input type="number" value={e.adblueLitros || ""} onChange={v=>upd({adblueLitros: Number(v.target.value)})}/></div>
-                <div><Label className="text-emerald-700">Fecha Carga</Label><Input type="date" value={e.adblueFecha || ""} onChange={v=>upd({adblueFecha: v.target.value})}/></div>
-              </div>
-            </div>
-          )}
-        </Card>
-      </div>
-
-      {/* PANEL LATERAL LEIBLE */}
-      <div className="space-y-4">
-        {!esBateaOCama ? (
-          <Card className="p-6 bg-white border-2 border-slate-100 shadow-xl text-slate-900">
-            <h4 className="text-[10px] font-black uppercase tracking-widest mb-6 text-slate-400 italic text-center">Control de Ciclos</h4>
-            <div className="space-y-8">
-              <div>
-                <div className="flex justify-between items-center mb-1">
-                  <span className="text-[10px] font-bold uppercase text-slate-500 tracking-tighter">Próx. Preventiva</span>
-                  <EstadoBadge estado={s.salud} />
-                </div>
-                <p className="text-3xl font-black italic tracking-tighter text-slate-900 leading-none">
-                  {s.salud === "FALTA INFORMACIÓN" ? "—" : `${fmt(s.proxPrev)} ${unit}`}
-                </p>
-                {s.salud !== "FALTA INFORMACIÓN" && <p className="text-[11px] font-bold text-blue-600 mt-1 uppercase text-left">Faltan: {fmt(s.restPrev)} {unit}</p>}
-                <button onClick={()=>{if(window.confirm(`¿Registrar realización?`)) upd({ultimaPreventivaHora: s.horaActual})}} className="w-full mt-4 bg-white text-slate-900 py-3 rounded-xl font-black text-xs uppercase tracking-tighter hover:bg-emerald-50 shadow-md border border-slate-100 transition-all">Registrar Prev.</button>
-              </div>
-              <div className="border-t border-slate-100 pt-6">
-                <div className="flex justify-between items-center mb-1">
-                  <span className="text-[10px] font-bold uppercase text-slate-500 tracking-tighter">Próx. General</span>
-                  <EstadoBadge estado={s.salud === "FALTA INFORMACIÓN" ? "FALTA INFORMACIÓN" : s.estGen} />
-                </div>
-                <p className="text-3xl font-black italic tracking-tighter text-slate-900 leading-none">
-                  {s.salud === "FALTA INFORMACIÓN" ? "—" : `${fmt(s.proxGen)} ${unit}`}
-                </p>
-                <button onClick={()=>{if(window.confirm(`¿Registrar realización?`)) upd({ultimaGeneralHora: s.horaActual})}} className="w-full mt-4 bg-white text-slate-900 py-3 rounded-xl font-black text-xs uppercase tracking-tighter hover:bg-blue-50 shadow-md border border-slate-100 transition-all">Registrar Gen.</button>
-              </div>
-            </div>
-          </Card>
-        ) : (
-          <Card className="p-6 bg-slate-900 text-white shadow-xl">
-             <h4 className="text-[10px] font-black uppercase text-slate-400 mb-6 tracking-widest text-center">Estatus Legal</h4>
-             <div className="space-y-6">
-                <div>
-                  <Label className="text-slate-400">R. Técnica</Label>
-                  <EstadoBadge estado={estadoPorDias(daysBetween(todayISO(), addYears(e.rtUltima || todayISO(), 1)), 30)} />
-                </div>
-                <div>
-                  <Label className="text-slate-400">P. Circulación</Label>
-                  <EstadoBadge estado={estadoPorDias(daysBetween(todayISO(), addYears(e.pcUltimo || todayISO(), 1)), 30)} />
-                </div>
-             </div>
-          </Card>
-        )}
-        <DocumentManager equipoId={e.id} docs={e.documentos || []} onUpdate={v => upd({documentos: v})} />
-        <Button variant="danger" className="w-full py-3 uppercase tracking-tighter font-black opacity-60 hover:opacity-100 transition-all shadow-sm" onClick={()=>removeEquipo(e.id)}>Dar de Baja</Button>
-      </div>
-    </div>
-  );
-});
 
 /* =========================== APP PRINCIPAL =========================== */
 export default function AppMantenciones(){
@@ -336,17 +344,16 @@ export default function AppMantenciones(){
 
   const calcularEstado = useCallback((e)=>{
     const esCamioneta = e.categoria === "CAMIONETA";
-    const esBatea = ["BATEA", "CAMA_BAJA"].includes(e.categoria);
-    if (esBatea) return { salud: "OK" };
+    if (["BATEA", "CAMA_BAJA"].includes(e.categoria)) return { salud: "OK" };
 
     const cat = CATEGORIES.find(c=>c.id===e.categoria);
     const prevCada = Number(e.preventivaCada ?? cat?.defaultPreventive ?? 250);
     const genCada = Number(e.generalCada || 2000);
     
-    // REGLA 3: Si falta información crítica (Punto 3)
-    if (!e.horaActual || !e.horaActualFecha || e.ultimaPreventivaHora === undefined || e.horaActual === 0) {
-      return { salud: "FALTA INFORMACIÓN", proxPrev: 0, proxGen: 0, restPrev: 0, restGen: 0, estPrev: "FALTA INFORMACIÓN", estGen: "FALTA INFORMACIÓN" };
-    }
+    // VALIDACIÓN DE DATOS (Punto 3 modificado por Ignacio)
+    if (!e.horaActual || e.horaActual === 0 || !e.horaActualFecha) return { salud: "⚠️ INGRESAR LECTURA", proxPrev: 0, proxGen: 0 };
+    if (!e.ultimaPreventivaHora || e.ultimaPreventivaHora === 0) return { salud: "⚙️ CONFIG. PREV", proxPrev: 0, proxGen: 0 };
+    if (!e.ultimaGeneralHora || e.ultimaGeneralHora === 0) return { salud: "🛠️ CONFIG. GEN", proxPrev: 0, proxGen: 0 };
 
     const elapsed = e.horaActualFecha ? (e.horasDiariasOverride > 0 ? daysBetween(e.horaActualFecha, todayISO()) * e.horasDiariasOverride : workingHoursBetween(e.horaActualFecha, todayISO())) : 0;
     const horaActual = Number(e.horaActual||0) + Math.max(0, elapsed);
@@ -355,47 +362,47 @@ export default function AppMantenciones(){
     const restPrev = proxPrev - horaActual;
     const restGen = proxGen - horaActual;
     
-    // REGLA 1: Pronto empieza desde 120h (Punto 1 y 4)
-    const thresholdPronto = esCamioneta ? 1000 : 120;
-    const thresholdUrgente = esCamioneta ? 500 : 40;
+    const prontoThreshold = esCamioneta ? 1000 : 120;
+    const urgenteThreshold = esCamioneta ? 500 : 40;
 
     const getEst = (r) => {
       if (r <= 0) return "VENCIDA";
-      if (r <= thresholdUrgente) return "URGENTE";
-      if (r <= thresholdPronto) return "PRONTO";
+      if (r <= urgenteThreshold) return "URGENTE";
+      if (r <= prontoThreshold) return "PRONTO";
       return "OK";
     };
 
-    const estPrev = getEst(restPrev);
-    const estGen = getEst(restGen);
-    const priority = { "FALTA INFORMACIÓN": 5, VENCIDA: 4, URGENTE: 3, PRONTO: 2, OK: 1 };
-    const worst = priority[estPrev] > priority[estGen] ? estPrev : estGen;
+    const sP = getEst(restPrev);
+    const sG = getEst(restGen);
+    const priority = { VENCIDA: 4, URGENTE: 3, PRONTO: 2, OK: 1 };
+    const worst = priority[sP] > priority[sG] ? sP : sG;
 
-    return { horaActual, proxPrev, proxGen, restPrev, restGen, estPrev, estGen, salud: worst };
+    return { horaActual, proxPrev, proxGen, restPrev, restGen, salud: worst };
   }, []);
 
   if (!view.cat) {
     return (
-      <div className="p-6 max-w-6xl mx-auto min-h-screen bg-slate-50 font-sans text-slate-900">
+      <div className="p-6 max-w-6xl mx-auto min-h-screen bg-slate-50 font-sans text-slate-900 text-left">
         <header className="mb-10 flex justify-between items-end border-b pb-6 border-slate-200">
-          <div><h1 className="text-5xl font-black tracking-tighter uppercase italic text-slate-900 leading-none">VIA 5</h1><p className="font-bold text-blue-600 uppercase text-[10px] tracking-widest text-left">GESTIÓN EFESA</p></div>
+          <div><h1 className="text-5xl font-black tracking-tighter uppercase italic text-slate-900 leading-none">VIA 5</h1><p className="font-bold text-blue-600 uppercase text-[10px] tracking-widest">SISTEMAS OPERATIVOS EFESA</p></div>
         </header>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {CATEGORIES.map(c => {
             const unidades = equipos.filter(e => e.categoria === c.id);
-            const critico = unidades.some(e => ["VENCIDA","URGENTE"].includes(calcularEstado(e).salud));
-            const falta = unidades.some(e => calcularEstado(e).salud === "FALTA INFORMACIÓN");
+            const statusList = unidades.map(e => calcularEstado(e).salud);
+            const esCritico = statusList.some(s => s === "VENCIDA" || s === "URGENTE");
+            const esFalta = statusList.some(s => s.includes("INGRESAR") || s.includes("CONFIG"));
             return (
               <Card key={c.id} onClick={() => setView({ cat: c.id, id: null })} className="p-8 group hover:border-blue-500 shadow-sm transition-all duration-300">
                 <div className="flex justify-between items-start mb-6">
                   <span className="text-7xl group-hover:scale-110 transition-transform duration-300">{c.icon}</span>
                   {unidades.length > 0 && (
-                    <span className={`px-3 py-1 rounded-full text-[10px] font-black ${critico ? 'bg-red-600 text-white animate-pulse' : (falta ? 'bg-slate-400 text-white' : 'bg-slate-900 text-white')}`}>
+                    <span className={`px-3 py-1 rounded-full text-[10px] font-black ${esCritico ? 'bg-red-600 text-white animate-pulse' : (esFalta ? 'bg-slate-400 text-white' : 'bg-slate-900 text-white')}`}>
                       {unidades.length} UNIDS
                     </span>
                   )}
                 </div>
-                <h3 className="text-xl font-black text-slate-800 uppercase italic leading-none text-left">{c.label}</h3>
+                <h3 className="text-xl font-black text-slate-800 uppercase italic leading-none">{c.label}</h3>
               </Card>
             );
           })}
@@ -407,17 +414,17 @@ export default function AppMantenciones(){
   if (view.cat && !view.id) {
     const cat = CATEGORIES.find(c => c.id === view.cat);
     return (
-      <div className="p-6 max-w-6xl mx-auto min-h-screen">
-        <div className="flex items-center gap-4 mb-10 text-slate-900 text-left">
+      <div className="p-6 max-w-6xl mx-auto min-h-screen text-left">
+        <div className="flex items-center gap-4 mb-10 text-slate-900">
           <Button variant="secondary" onClick={() => setView({ cat: null, id: null })} className="rounded-full w-12 h-12 p-0 text-xl font-black shadow-md">←</Button>
           <h2 className="text-4xl font-black uppercase italic tracking-tighter">{cat.icon} {cat.label}</h2>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
           {equipos.filter(e => e.categoria === view.cat).map(e => (
             <Card key={e.id} onClick={() => setView({ ...view, id: e.id })} className="p-6 border-l-[16px] border-l-blue-600 shadow-md">
-              <div className="font-black text-2xl mb-1 text-slate-800 tracking-tighter uppercase text-left">{e.patente || "S/P"}</div>
-              <div className="text-[10px] font-bold text-slate-400 mb-6 uppercase tracking-widest text-left">{e.marca || "No definida"}</div>
-              <div className="text-left"><EstadoBadge estado={calcularEstado(e).salud} /></div>
+              <div className="font-black text-2xl mb-1 text-slate-800 tracking-tighter uppercase">{e.patente || "S/P"}</div>
+              <div className="text-[10px] font-bold text-slate-400 mb-6 uppercase tracking-widest">{e.marca || "No definida"}</div>
+              <EstadoBadge estado={calcularEstado(e).salud} />
             </Card>
           ))}
           <button onClick={() => {
@@ -431,12 +438,12 @@ export default function AppMantenciones(){
 
   const equipoActual = equipos.find(x => x.id === view.id);
   return (
-    <div className="p-6 max-w-7xl mx-auto min-h-screen bg-slate-50">
+    <div className="p-6 max-w-7xl mx-auto min-h-screen bg-slate-50 text-slate-900 text-left">
       <div className="mb-8 flex justify-between items-center bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
-        <Button variant="secondary" onClick={() => setView({ ...view, id: null })} className="uppercase italic tracking-tighter font-black shadow-sm transition-all text-slate-900">← Listado</Button>
+        <Button variant="secondary" onClick={() => setView({ ...view, id: null })} className="uppercase italic tracking-tighter font-black shadow-sm">← Listado de Flota</Button>
         <div className="text-right">
-          <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest">Ficha de Equipo EFESA</p>
-          <h2 className="text-3xl font-black text-slate-900 italic uppercase tracking-tighter">{equipoActual?.patente || "NUEVO"}</h2>
+          <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest leading-none">EXPEDIENTE DE ACTIVO</p>
+          <h2 className="text-3xl font-black text-slate-900 italic uppercase tracking-tighter leading-none">{equipoActual?.patente || "NUEVO"}</h2>
         </div>
       </div>
       {equipoActual && <RowEditor e={equipoActual} calcularEstado={calcularEstado} updateEquipo={(id, p) => updateDoc(doc(db, "equipos", id), { ...p, updatedAt: serverTimestamp() })} removeEquipo={(id) => { if(window.confirm("¿Eliminar?")) { deleteDoc(doc(db,"equipos",id)); setView({...view, id: null}); } }} />}
@@ -444,7 +451,6 @@ export default function AppMantenciones(){
   );
 }
 
-// Función auxiliar para RT/PC en Bateas
 function estadoPorDias(dias, horizonte){
   if(dias<=0) return "VENCIDA"; if(dias<=7) return "URGENTE"; if(dias<=horizonte) return "PRONTO"; return "OK";
 }
