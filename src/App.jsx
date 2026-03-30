@@ -86,7 +86,7 @@ const Button = ({children, className="", variant="primary", ...p})=> {
 };
 
 const EstadoBadge = ({ estado }) => {
-  const map = { VENCIDA:"bg-red-600 text-white animate-pulse", URGENTE:"bg-orange-500 text-white", PRONTO:"bg-yellow-400 text-black", OK:"bg-emerald-500 text-white" };
+  const map = { VENCIDA:"bg-red-600 text-white animate-pulse", URGENTE:"bg-orange-500 text-white", PRONTO:"bg-yellow-400 text-black", OK:"bg-emerald-800 text-white" };
   const isMissing = estado && (estado.includes("LECTURA") || estado.includes("PREV") || estado.includes("GEN"));
   const style = isMissing ? "bg-black text-white border border-slate-500" : (map[estado] || "bg-slate-200 text-slate-800");
   return <span className={`px-2.5 py-1.5 rounded-lg text-[10px] font-black uppercase shadow-md ${style}`}>{estado}</span>;
@@ -233,25 +233,25 @@ const RowEditor = memo(function RowEditor({ e, calcularEstado, updateEquipo, rem
       {/* PANEL LATERAL: ESTATUS VERDE (ALTA VISIBILIDAD) */}
       <div className="space-y-4">
         {!esBateaOCama ? (
-          <Card className="p-6 bg-emerald-700 text-white shadow-2xl border-b-8 border-emerald-900">
+          <Card className="p-6 bg-slate-50 border-2 border-slate-200 text-slate-900">
             <h4 className="text-[11px] font-black uppercase tracking-[0.2em] mb-8 text-emerald-100 italic text-center">Estatus de Ciclo</h4>
             <div className="space-y-10">
               
               {!esCamioneta && (
                 <div className="relative">
                   <div className="flex justify-between items-center mb-2">
-                    <span className="text-[10px] font-black uppercase text-emerald-200">Próx. Preventiva</span>
+                    <span className="text-[10px] font-black uppercase text-slate-500">Próx. Preventiva</span>
                     <EstadoBadge estado={s.estPrev} />
                   </div>
-                  <p className="text-4xl font-black italic tracking-tighter text-white leading-none">
+                  <p className="text-4xl font-black italic tracking-tighter text-black leading-none">
                     {s.estPrev.includes("LECTURA") || s.estPrev.includes("PREV") ? "—" : `${fmt(s.proxPrev)} ${unit}`}
                   </p>
                   {!s.estPrev.includes("LECTURA") && !s.estPrev.includes("PREV") && (
-                     <p className="text-[12px] font-black text-emerald-100 mt-2 uppercase">
+                     <p className="text-[12px] font-black text-blue-700 mt-2 uppercase">
                         {s.estPrev === "VENCIDA" ? "PASADO POR:" : "Restan:"} {fmt(Math.max(0, s.restPrev))} {unit}
                      </p>
                   )}
-                  <button onClick={()=>{if(window.confirm(`¿Registrar Prev?`)) upd({ultimaPreventivaHora: s.horaActual})}} className="w-full mt-4 bg-white text-emerald-900 py-3 rounded-xl font-black text-[10px] uppercase shadow-md hover:bg-emerald-50 transition-all">Registrar Prev.</button>
+                  <button onClick={()=>{if(window.confirm(`¿Registrar Prev?`)) upd({ultimaPreventivaHora: s.horaActual})}} className="w-full mt-4 bg-emerald-800 text-white py-3 rounded-xl font-black text-[10px] uppercase shadow-md hover:bg-emerald-50 transition-all">Registrar Prev.</button>
                 </div>
               )}
 
