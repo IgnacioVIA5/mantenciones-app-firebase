@@ -2,10 +2,11 @@
 import React, { useMemo, useState, useEffect, useCallback, memo } from "react";
 import { initializeApp } from "firebase/app";
 import { getAuth, signInAnonymously } from "firebase/auth";
-import { getFirestore, collection, onSnapshot, addDoc, updateDoc, doc, deleteDoc, serverTimestamp } from "firebase/firestore";
-import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
+import {
+  getFirestore, collection, onSnapshot, addDoc,
+  updateDoc, doc, deleteDoc, serverTimestamp
+} from "firebase/firestore";
 
-/* ======================= FIREBASE CONFIG REAL ======================= */
 const firebaseConfig = {
   apiKey: "AIzaSyAwBnvWXLKO7ctOwmHYf4SO2CACz1D6ADI",
   authDomain: "mantenciones-v-5.firebaseapp.com",
@@ -13,439 +14,528 @@ const firebaseConfig = {
   storageBucket: "mantenciones-v-5.firebasestorage.app",
   messagingSenderId: "294743117767",
   appId: "1:294743117767:web:27f28d9e2276484308d3e2",
-  measurementId: "G-84565JJ9L0",
 };
 
-const app = initializeApp(firebaseConfig);
+const app  = initializeApp(firebaseConfig);
 const auth = getAuth(app);
-const db = getFirestore(app);
-const storage = getStorage(app);
-async function ensureAnonAuth(){ if(!auth.currentUser) await signInAnonymously(auth); return auth.currentUser; }
+const db   = getFirestore(app);
+async function ensureAnonAuth() { if (!auth.currentUser) await signInAnonymously(auth); return auth.currentUser; }
+
+/* ── PALETA FIJA (inline styles, nunca depende de Tailwind purge) ── */
+const P = {
+  page:        "#f1f5f9",
+  card:        "#ffffff",
+  border:      "#e2e8f0",
+  // oscuros
+  dark:        "#0f172a",
+  darkPanel:   "#1e293b",
+  darkBlue:    "#1d4ed8",
+  // texto sobre blanco
+  txtTitle:    "#0f172a",
+  txtBody:     "#374151",
+  txtLabel:    "#1e293b",
+  txtMuted:    "#64748b",
+  // texto sobre oscuro
+  txtWhite:    "#ffffff",
+  txtLight:    "#e2e8f0",
+  txtDim:      "#94a3b8",
+  // estados
+  red:         "#dc2626",
+  redLight:    "#fca5a5",
+  orange:      "#f97316",
+  yellow:      "#facc15",
+  green:       "#16a34a",
+  blue:        "#2563eb",
+  blueLight:   "#93c5fd",
+};
 
 const CATEGORIES = [
-  { id: "CARGADOR",   label: "Cargadores Frontales", icon: "🚜", defaultPreventive: 200 },
-  { id: "CAMION",      label: "Camiones Tolva",      icon: "🚛", defaultPreventive: 300 },
-  { id: "EXCAVADORA", label: "Excavadoras",          icon: "🏗️", defaultPreventive: 250 },
-  { id: "CAMIONETA",  label: "Camionetas",           icon: "🛻", defaultPreventive: 0 }, // Estandarizado: 0 Prev para camionetas
-  { id: "GENERADOR",  label: "Generadores",          icon: "⚡", defaultPreventive: 250 },
-  { id: "BATEA",      label: "Bateas",               icon: "📦", defaultPreventive: 0 },
-  { id: "CAMA_BAJA",  label: "Camas Bajas",          icon: "🛤️", defaultPreventive: 0 },
+  { id:"CARGADOR",   label:"Cargadores Frontales", icon:"🚜", defaultPreventive:200 },
+  { id:"CAMION",     label:"Camiones Tolva",       icon:"🚛", defaultPreventive:300 },
+  { id:"EXCAVADORA", label:"Excavadoras",          icon:"🏗️", defaultPreventive:250 },
+  { id:"CAMIONETA",  label:"Camionetas",           icon:"🛻", defaultPreventive:0   },
+  { id:"GENERADOR",  label:"Generadores",          icon:"⚡", defaultPreventive:250 },
+  { id:"BATEA",      label:"Bateas",               icon:"📦", defaultPreventive:0   },
+  { id:"CAMA_BAJA",  label:"Camas Bajas",          icon:"🛤️", defaultPreventive:0   },
 ];
 
-const BRAND_OPTIONS = {
-  CAMION: ["Mack", "Volkswagen", "Renault"],
-  CARGADOR: ["Komatsu", "Hyundai"],
-  EXCAVADORA: ["Develon", "Hyundai"],
-  GENERADOR: ["BSG"],
-  CAMIONETA: ["Maxus", "Peugeot"],
-  BATEA: ["Randon"],
-  CAMA_BAJA: ["Schilger"],
+const BRANDS = {
+  CAMION:["Mack","Volkswagen","Renault"], CARGADOR:["Komatsu","Hyundai"],
+  EXCAVADORA:["Develon","Hyundai"], GENERADOR:["BSG"],
+  CAMIONETA:["Maxus","Peugeot"], BATEA:["Randon"], CAMA_BAJA:["Schilger"],
 };
 
-function platesFor(categoria, marca){
-  if (marca === "Mack") return ["DFLW-71", "DRHK-42", "DHXR-54", "WY-8717"]; 
-  if (marca === "Volkswagen") return ["RHGC-83", "RKSC-25"];
-  if (marca === "Renault") return ["SW-6114"];
-  if (marca === "Komatsu") return ["SDTP-59"];
-  if (marca === "Hyundai") {
-    if (categoria === "CARGADOR") return ["LXDT-19"];
-    if (categoria === "EXCAVADORA") return ["LVGS-87", "HDWS-49"];
+function platesFor(cat, marca) {
+  if (marca==="Mack")       return ["DFLW-71","DRHK-42","DHXR-54","WY-8717"];
+  if (marca==="Volkswagen") return ["RHGC-83","RKSC-25"];
+  if (marca==="Renault")    return ["SW-6114"];
+  if (marca==="Komatsu")    return ["SDTP-59"];
+  if (marca==="Hyundai") {
+    if (cat==="CARGADOR")   return ["LXDT-19"];
+    if (cat==="EXCAVADORA") return ["LVGS-87","HDWS-49"];
   }
-  if (marca === "Develon") return ["TCCW-19"];
-  if (marca === "Maxus") return ["RHRB-94"];
-  if (marca === "Peugeot") return ["TTVR-19"];
-  if (marca === "Randon") return ["JL-8263"];
-  if (marca === "Schilger") return ["JH-4921"];
+  if (marca==="Develon")  return ["TCCW-19"];
+  if (marca==="Maxus")    return ["RHRB-94"];
+  if (marca==="Peugeot")  return ["TTVR-19"];
+  if (marca==="Randon")   return ["JL-8263"];
+  if (marca==="Schilger") return ["JH-4921"];
   return [];
 }
 
-const OPERATORS = ["Eligio Miranda", "Patricio Obando", "Salomón Fernández", "Segundo Gómez", "Fernando Gueicha", "Francisco Bahamonde", "Pedro Espinoza", "Cecilia Sandoval", "Ignacio Echeverría"];
+const OPERATORS = ["Eligio Miranda","Patricio Obando","Salomón Fernández","Segundo Gómez",
+  "Fernando Gueicha","Francisco Bahamonde","Pedro Espinoza","Cecilia Sandoval","Ignacio Echeverría"];
 
-function fmt(n,dec=0){ if(n===null||n===undefined||Number.isNaN(+n)) return "—"; return Number(n).toLocaleString("es-CL",{minimumFractionDigits:dec,maximumFractionDigits:dec}); }
-const todayISO = ()=>{ const d=new Date(); d.setHours(0,0,0,0); const p=n=>String(n).padStart(2,"0"); return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`; };
-function parseISO(d){ if(!d) return null; const [y,m,da]=String(d).split("-").map(Number); if(!y||!m||!da) return null; const dt=new Date(y,m-1,da); return Number.isNaN(dt.getTime())?null:dt; }
-function daysBetween(a,b){ const A=parseISO(a); const B=parseISO(b||todayISO()); if(!A||!B) return 0; const ms=B.setHours(0,0,0,0)-A.setHours(0,0,0,0); return Math.round(ms/86400000); }
-const WORK_SCHEDULE = { 1:9, 2:9, 3:9, 4:9, 5:8, 6:0, 0:0 };
-function workingHoursBetween(a,b){
-  const A=parseISO(a); const B=parseISO(b||todayISO()); if(!A||!B) return 0;
-  let tot=0; const cur=new Date(A.getTime());
-  while(cur<=B){ tot+=WORK_SCHEDULE[cur.getDay()]||0; cur.setDate(cur.getDate()+1); }
-  return tot;
+/* ── UTILS ── */
+function fmt(n,dec=0){ if(n==null||Number.isNaN(+n))return "—"; return Number(n).toLocaleString("es-CL",{minimumFractionDigits:dec,maximumFractionDigits:dec}); }
+const todayISO=()=>{ const d=new Date(); d.setHours(0,0,0,0); const p=n=>String(n).padStart(2,"0"); return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`; };
+function parseISO(d){ if(!d)return null; const[y,m,da]=String(d).split("-").map(Number); if(!y||!m||!da)return null; const dt=new Date(y,m-1,da); return isNaN(dt)?null:dt; }
+function daysBetween(a,b){ const A=parseISO(a),B=parseISO(b||todayISO()); if(!A||!B)return 0; return Math.round((new Date(B).setHours(0,0,0,0)-new Date(A).setHours(0,0,0,0))/86400000); }
+const WS={1:9,2:9,3:9,4:9,5:8,6:0,0:0};
+function workHrs(a,b){ const A=parseISO(a),B=parseISO(b||todayISO()); if(!A||!B)return 0; let t=0; const c=new Date(A); while(c<=B){t+=WS[c.getDay()]||0;c.setDate(c.getDate()+1);} return t; }
+function addYears(iso,y=1){ const d=parseISO(iso); if(!d)return null; d.setFullYear(d.getFullYear()+y); return d.toISOString().slice(0,10); }
+function estadoPorDias(d,h){ if(d<=0)return"VENCIDA"; if(d<=7)return"URGENTE"; if(d<=h)return"PRONTO"; return"OK"; }
+
+/* ── BADGE ── */
+function badgeSt(e){
+  if(!e) return {bg:"#e2e8f0",fg:P.txtBody};
+  if(e==="VENCIDA") return {bg:P.red,fg:"#fff"};
+  if(e==="URGENTE") return {bg:P.orange,fg:"#fff"};
+  if(e==="PRONTO")  return {bg:P.yellow,fg:P.dark};
+  if(e==="OK")      return {bg:P.green,fg:"#fff"};
+  return {bg:"#334155",fg:"#fff"};
 }
-function addYears(iso, years=1){ const d=parseISO(iso); if(!d) return null; d.setFullYear(d.getFullYear()+years); return d.toISOString().slice(0,10); }
+const Badge=({e})=>{const s=badgeSt(e);return<span style={{background:s.bg,color:s.fg,padding:"3px 10px",borderRadius:8,fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.04em",display:"inline-block"}}>{e}</span>;}
 
-/* ====================== COMPONENTES UI ESTANDARIZADOS ====================== */
-const Card = ({children, className="", onClick})=> <div onClick={onClick} className={`rounded-2xl border border-slate-200 bg-white shadow-sm transition-all ${onClick ? 'cursor-pointer hover:shadow-md active:scale-[0.98]' : ''} ${className}`}>{children}</div>;
-const Label = ({children, className=""})=> <label className={`text-xs font-black text-slate-800 uppercase mb-1.5 block tracking-tight ${className}`}>{children}</label>;
-const Input = ({className="",...p})=> <input className={`w-full px-3.5 py-2.5 rounded-xl border-2 border-slate-300 bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-100 focus:outline-none transition-all text-sm text-slate-900 font-bold ${className}`} {...p}/>;
-const Button = ({children, className="", variant="primary", ...p})=> {
-  const base = "inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-black transition-all active:scale-95 text-xs uppercase tracking-tighter";
-  let styles = variant === "primary" ? "bg-blue-600 text-white hover:bg-blue-700 shadow-sm" : (variant === "secondary" ? "bg-white border-2 border-slate-200 text-slate-900 hover:bg-slate-100" : "bg-red-50 text-red-700 border border-red-200 hover:bg-red-100");
-  return <button className={`${base} ${styles} ${className}`} {...p}>{children}</button>;
+/* ── CONTROLES REUTILIZABLES ── */
+const iBase={width:"100%",padding:"9px 13px",borderRadius:10,border:`2px solid ${P.border}`,background:P.card,color:P.txtTitle,fontSize:14,fontWeight:600,outline:"none",boxSizing:"border-box"};
+const Inp=({sx={},...p})=><input style={{...iBase,...sx}} {...p} onFocus={e=>e.target.style.borderColor=P.blue} onBlur={e=>e.target.style.borderColor=P.border}/>;
+const Sel=({sx={},children,...p})=><select style={{...iBase,...sx}} {...p}>{children}</select>;
+const Lbl=({c=P.txtLabel,children})=><label style={{display:"block",fontSize:11,fontWeight:700,color:c,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:5}}>{children}</label>;
+const Sec=({c=P.txtMuted,children})=><p style={{fontSize:11,fontWeight:700,color:c,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:14}}>{children}</p>;
+const Btn=({v="primary",sx={},children,...p})=>{
+  const vs={primary:{bg:P.blue,fg:"#fff"},secondary:{bg:P.card,fg:P.txtTitle,border:`2px solid ${P.border}`},danger:{bg:P.red,fg:"#fff"}};
+  const s=vs[v]||vs.primary;
+  return<button style={{display:"inline-flex",alignItems:"center",justifyContent:"center",gap:8,padding:"10px 18px",borderRadius:10,fontWeight:700,fontSize:13,cursor:"pointer",border:s.border||"none",background:s.bg,color:s.fg,transition:"opacity 0.15s",...sx}} onMouseOver={e=>e.currentTarget.style.opacity="0.85"} onMouseOut={e=>e.currentTarget.style.opacity="1"} {...p}>{children}</button>;
 };
 
-const EstadoBadge = ({ estado }) => {
-  const map = { 
-    VENCIDA:"bg-red-600 text-white animate-pulse", 
-    URGENTE:"bg-orange-500 text-white", 
-    PRONTO:"bg-yellow-400 text-slate-900", 
-    OK:"bg-emerald-600 text-white" 
-  };
-  const isMissing = estado && (estado.includes("LECTURA") || estado.includes("PREV") || estado.includes("GEN"));
-  const style = isMissing ? "bg-slate-900 text-white border border-slate-600" : (map[estado] || "bg-slate-100 text-slate-800");
-  return <span className={`px-2.5 py-1.5 rounded-lg text-[10px] font-black uppercase shadow-sm whitespace-nowrap tracking-tight ${style}`}>{estado}</span>;
-};
+/* ── INSUMOS ── */
+function InsumosTable({title,value=[],onChange}){
+  return(
+    <div style={{background:"#f8fafc",border:`2px solid ${P.border}`,borderRadius:14,padding:14}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+        <Sec c={P.txtBody}>{title}</Sec>
+        <button onClick={()=>onChange([...value,{tipo:"Filtro",nombre:"",cant:1,enBodega:false}])} style={{fontSize:12,fontWeight:700,color:P.blue,background:"none",border:"none",cursor:"pointer"}}>+ Agregar</button>
+      </div>
+      {value.length===0&&<p style={{fontSize:12,color:P.txtDim,textAlign:"center",padding:"6px 0",fontStyle:"italic"}}>Sin insumos</p>}
+      {value.map((r,i)=>(
+        <div key={i} style={{display:"flex",flexWrap:"wrap",gap:6,alignItems:"center",background:P.card,padding:"7px 10px",borderRadius:9,border:`1px solid ${P.border}`,marginBottom:6}}>
+          <select value={r.tipo} onChange={e=>onChange(value.map((x,idx)=>idx===i?{...x,tipo:e.target.value}:x))} style={{fontSize:11,fontWeight:600,border:"none",background:"#f1f5f9",borderRadius:6,padding:"3px 6px",color:P.txtTitle}}>
+            <option>Filtro</option><option>Aceite</option><option>Otro</option>
+          </select>
+          <input style={{fontSize:12,flex:1,padding:"3px 8px",borderRadius:6,border:`1px solid ${P.border}`,outline:"none",color:P.txtTitle,minWidth:70}} placeholder="Descripción..." value={r.nombre} onChange={e=>onChange(value.map((x,idx)=>idx===i?{...x,nombre:e.target.value}:x))}/>
+          <input type="number" style={{fontSize:12,fontWeight:700,width:42,textAlign:"center",border:`1px solid ${P.border}`,borderRadius:6,padding:"3px",color:P.txtTitle}} value={r.cant} onChange={e=>onChange(value.map((x,idx)=>idx===i?{...x,cant:Number(e.target.value)}:x))}/>
+          <span style={{fontSize:10,color:P.txtDim,fontWeight:700,width:12}}>{r.tipo==="Aceite"?"L":"un"}</span>
+          <label style={{display:"flex",alignItems:"center",gap:4,cursor:"pointer"}}>
+            <input type="checkbox" checked={r.enBodega} onChange={e=>onChange(value.map((x,idx)=>idx===i?{...x,enBodega:e.target.checked}:x))}/>
+            <span style={{fontSize:10,fontWeight:700,color:P.txtMuted,textTransform:"uppercase"}}>Bodega</span>
+          </label>
+          <button onClick={()=>onChange(value.filter((_,idx)=>idx!==i))} style={{color:P.red,background:"none",border:"none",cursor:"pointer",fontWeight:700,fontSize:14}}>✕</button>
+        </div>
+      ))}
+    </div>
+  );
+}
 
-/* =================== EDITOR DE EQUIPO (MÓDULO UNIFICADO) =================== */
-const RowEditor = memo(function RowEditor({ e, calcularEstado, updateEquipo, removeEquipo }){
-  const s = calcularEstado(e);
-  const cat = CATEGORIES.find(c=>c.id===e.categoria);
-  const upd = (p) => updateEquipo(e.id, p);
-  const esCamioneta = e.categoria === "CAMIONETA";
-  const esCamion = e.categoria === "CAMION";
-  const esBateaOCama = ["BATEA", "CAMA_BAJA"].includes(e.categoria);
-  const sinLegal = ["CARGADOR", "EXCAVADORA", "GENERADOR"].includes(e.categoria);
-  const labelMain = esCamioneta ? "Odómetro" : "Horómetro";
-  const unit = esCamioneta ? "km" : "h";
+/* ── PANEL ESTADO (fondo oscuro garantizado con inline style) ── */
+function StatusPanel({s,e,unit,esCamioneta,upd}){
+  const esBOC=["BATEA","CAMA_BAJA"].includes(e.categoria);
+  const darkInput={...iBase,background:"#1e293b",color:"#ffffff",borderColor:"#334155"};
+  const panel={background:P.dark,borderRadius:16,padding:24,boxShadow:"0 4px 20px rgba(0,0,0,0.4)"};
 
-  return (
-    <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 animate-in fade-in duration-500 text-slate-900">
-      <div className="lg:col-span-3 space-y-6">
-        
-        {/*Identificación del Activo - Estandarizado */}
-        <Card className="p-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-            <div><Label>Marca del Equipo</Label>
-              <select className="w-full text-sm border-2 border-slate-300 rounded-xl p-3 bg-white font-black text-slate-900 focus:border-blue-500 focus:outline-none" value={e.marca} onChange={v=>upd({marca:v.target.value, patente:""})}>
-                <option value="">— Seleccionar —</option>
-                {(BRAND_OPTIONS[e.categoria]||[]).map(m=><option key={m}>{m}</option>)}
-              </select>
+  if(esBOC){
+    const estRT=estadoPorDias(daysBetween(todayISO(),addYears(e.rtUltima||todayISO(),1)),30);
+    const estPC=estadoPorDias(daysBetween(todayISO(),addYears(e.pcUltimo||todayISO(),1)),30);
+    return(
+      <div style={panel}>
+        <Sec c={P.txtLight}>Control Legal</Sec>
+        <div style={{display:"flex",flexDirection:"column",gap:12,marginBottom:18}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <span style={{color:P.txtLight,fontSize:14,fontWeight:600}}>Revisión Técnica</span><Badge e={estRT}/>
+          </div>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <span style={{color:P.txtLight,fontSize:14,fontWeight:600}}>Permiso Circulación</span><Badge e={estPC}/>
+          </div>
+        </div>
+        <div style={{display:"flex",flexDirection:"column",gap:10}}>
+          <div><Lbl c={P.txtLight}>Últ. Revisión Técnica</Lbl><input type="date" value={e.rtUltima||""} onChange={v=>upd({rtUltima:v.target.value})} style={darkInput}/></div>
+          <div><Lbl c={P.txtLight}>Últ. Permiso Circulación</Lbl><input type="date" value={e.pcUltimo||""} onChange={v=>upd({pcUltimo:v.target.value})} style={darkInput}/></div>
+        </div>
+      </div>
+    );
+  }
+
+  const renderMant=(label,est,prox,rest,onReg)=>(
+    <div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+        <span style={{color:P.txtLight,fontSize:12,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.05em"}}>{label}</span>
+        <Badge e={est}/>
+      </div>
+      {!est.includes("LECTURA")&&!est.includes("PREV")&&!est.includes("GEN")?(
+        est==="VENCIDA"?(
+          <>
+            <p style={{fontSize:30,fontWeight:900,color:P.redLight,lineHeight:1,margin:0}}>
+              -{fmt(Math.abs(rest))} <span style={{fontSize:13,color:P.redLight}}>{unit}</span>
+            </p>
+            <p style={{fontSize:11,color:P.redLight,fontWeight:700,marginTop:4,textTransform:"uppercase"}}>
+              Debió hacerse a {fmt(prox)} {unit}
+            </p>
+          </>
+        ):(
+          <>
+            <p style={{fontSize:30,fontWeight:900,color:P.txtWhite,lineHeight:1,margin:0}}>
+              {fmt(rest)} <span style={{fontSize:13,color:P.txtDim}}>{unit}</span>
+            </p>
+            <p style={{fontSize:11,color:P.txtDim,fontWeight:700,marginTop:4,textTransform:"uppercase"}}>
+              Restan · próx. a {fmt(prox)} {unit}
+            </p>
+          </>
+        )
+      ):(
+        <p style={{fontSize:12,color:P.txtDim,fontStyle:"italic",marginTop:4}}>Completar datos para calcular</p>
+      )}
+      <button onClick={onReg} style={{width:"100%",marginTop:10,background:"#14532d",color:"#ffffff",padding:"9px",borderRadius:9,fontWeight:700,fontSize:11,textTransform:"uppercase",border:"none",cursor:"pointer"}}>
+        ✓ Registrar {label.split(".")[1]?.trim()||label}
+      </button>
+    </div>
+  );
+
+  return(
+    <div style={panel}>
+      <Sec c={P.txtLight}>Estado de Ciclo</Sec>
+      <div style={{display:"flex",flexDirection:"column",gap:20}}>
+        {!esCamioneta&&renderMant("Próx. Preventiva",s.estPrev,s.proxPrev,s.restPrev,()=>{if(window.confirm("¿Registrar preventiva?"))upd({ultimaPreventivaHora:s.horaActual});})}
+        <div style={!esCamioneta?{borderTop:"1px solid #334155",paddingTop:20}:{}}>
+          {renderMant("Próx. General",s.estGen,s.proxGen,s.restGen,()=>{if(window.confirm("¿Registrar general?"))upd({ultimaGeneralHora:s.horaActual});})}
+        </div>
+        {!["CARGADOR","EXCAVADORA","GENERADOR"].includes(e.categoria)&&(
+          <div style={{borderTop:"1px solid #334155",paddingTop:18,display:"flex",flexDirection:"column",gap:10}}>
+            <Sec c={P.txtLight}>Documentos Legales</Sec>
+            <div>
+              <Lbl c={P.txtLight}>Revisión Técnica (últ.)</Lbl>
+              <input type="date" value={e.rtUltima||""} onChange={v=>upd({rtUltima:v.target.value})} style={darkInput}/>
+              {e.rtUltima&&<div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:5}}>
+                <span style={{fontSize:11,color:P.txtDim}}>Vence {addYears(e.rtUltima,1)}</span>
+                <Badge e={estadoPorDias(daysBetween(todayISO(),addYears(e.rtUltima,1)),30)}/>
+              </div>}
             </div>
-            <div><Label>Patente / ID</Label>
-              <select className="w-full text-sm border-2 border-slate-300 rounded-xl p-3 bg-white font-black text-blue-700 uppercase focus:border-blue-500 focus:outline-none" value={e.patente} onChange={v=>upd({patente:v.target.value})}>
-                <option value="">— Seleccionar —</option>
-                {platesFor(e.categoria, e.marca).map(p=><option key={p}>{p}</option>)}
-              </select>
-            </div>
-            <div><Label>Operador Responsable</Label>
-              <select className="w-full text-sm border-2 border-slate-300 rounded-xl p-3 bg-white font-black text-slate-900 focus:border-blue-500 focus:outline-none" value={e.operador} onChange={v=>upd({operador:v.target.value})}>
-                <option value="">— Seleccionar —</option>
-                {OPERATORS.map(o=><option key={o}>{o}</option>)}
-              </select>
+            <div>
+              <Lbl c={P.txtLight}>Permiso Circulación (últ.)</Lbl>
+              <input type="date" value={e.pcUltimo||""} onChange={v=>upd({pcUltimo:v.target.value})} style={darkInput}/>
+              {e.pcUltimo&&<div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:5}}>
+                <span style={{fontSize:11,color:P.txtDim}}>Vence {addYears(e.pcUltimo,1)}</span>
+                <Badge e={estadoPorDias(daysBetween(todayISO(),addYears(e.pcUltimo,1)),30)}/>
+              </div>}
             </div>
           </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
-          {/* LECTURA ACTUAL - Estandarizado visualmente (Card Blanca, sin grandes sombras ni degradados fuertes) */}
-          {!esBateaOCama && (
-            <div className="mb-8 p-6 bg-slate-50 rounded-[2rem] border border-blue-200">
-               <div className="flex items-center gap-3 mb-4 justify-center">
-                 <span className="text-2xl">📍</span>
-                 <h4 className="text-[11px] font-black text-slate-800 uppercase tracking-[0.2em] italic">Registro de Lectura Actual</h4>
-               </div>
-               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                  <div>
-                    <Label className="text-slate-800 mb-2">Lectura de {labelMain} ({unit})</Label>
-                    <input 
-                      type="number" 
-                      className="w-full px-6 py-4 rounded-2xl border-2 border-slate-300 bg-white text-slate-950 font-black text-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-100 focus:outline-none transition-all" 
-                      placeholder="0.0"
-                      value={e.horaActual || ""} 
-                      onChange={v=>upd({horaActual:Number(v.target.value)})}
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-slate-800 mb-2">Fecha de esta Lectura</Label>
-                    <input 
-                      type="date" 
-                      className="w-full px-6 py-4 rounded-2xl border-2 border-slate-300 bg-white text-slate-950 font-black text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100 focus:outline-none" 
-                      value={e.horaActualFecha || ""} 
-                      onChange={v=>upd({horaActualFecha: v.target.value})}
-                    />
-                  </div>
-               </div>
+/* ── EDITOR EQUIPO ── */
+const RowEditor=memo(function RowEditor({e,calcularEstado,updateEquipo,removeEquipo}){
+  const s=calcularEstado(e);
+  const upd=p=>updateEquipo(e.id,p);
+  const esCam=e.categoria==="CAMIONETA", esCamion=e.categoria==="CAMION";
+  const esBOC=["BATEA","CAMA_BAJA"].includes(e.categoria);
+  const lbl=esCam?"Odómetro":"Horómetro", unit=esCam?"km":"h";
+
+  return(
+    <div style={{display:"grid",gridTemplateColumns:"minmax(0,3fr) minmax(0,1fr)",gap:20,alignItems:"start"}}>
+
+      {/* COLUMNA PRINCIPAL */}
+      <div style={{display:"flex",flexDirection:"column",gap:18}}>
+
+        {/* Identificación */}
+        <div style={{background:P.card,border:`1px solid ${P.border}`,borderRadius:16,padding:22,boxShadow:"0 1px 4px rgba(0,0,0,0.06)"}}>
+          <Sec>Identificación</Sec>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:14}}>
+            <div><Lbl>Marca</Lbl>
+              <Sel value={e.marca||""} onChange={v=>upd({marca:v.target.value,patente:""})}>
+                <option value="">— Seleccionar —</option>
+                {(BRANDS[e.categoria]||[]).map(m=><option key={m}>{m}</option>)}
+              </Sel>
             </div>
-          )}
+            <div><Lbl>Patente / ID</Lbl>
+              <Sel value={e.patente||""} onChange={v=>upd({patente:v.target.value})}>
+                <option value="">— Seleccionar —</option>
+                {platesFor(e.categoria,e.marca).map(p=><option key={p}>{p}</option>)}
+              </Sel>
+            </div>
+            <div><Lbl>Operador</Lbl>
+              <Sel value={e.operador||""} onChange={v=>upd({operador:v.target.value})}>
+                <option value="">— Sin asignar —</option>
+                {OPERATORS.map(o=><option key={o}>{o}</option>)}
+              </Sel>
+            </div>
+          </div>
+        </div>
 
-          {/* Registro Dual para Camiones - Estandarizado (Exactamente igual que las otras tarjetas) */}
-          {esCamion && (
-            <Card className="mb-8 p-6 bg-white border border-slate-300">
-               <h4 className="text-[11px] font-black text-slate-800 uppercase mb-4 tracking-widest italic flex items-center gap-2">
-                 <span className="text-xl">🛣️</span> Registro Complementario: Odómetro (km)
-               </h4>
-               <div className="grid grid-cols-2 gap-6">
-                  <input type="number" className="w-full px-5 py-3 rounded-xl border-2 border-slate-300 bg-white text-slate-900 font-bold text-base focus:border-blue-500 focus:outline-none" placeholder="Km actual..." value={e.odometro || ""} onChange={v=>upd({odometro: Number(v.target.value)})}/>
-                  <input type="date" className="w-full px-5 py-3 rounded-xl border-2 border-slate-300 bg-white text-slate-900 font-bold focus:border-blue-500 focus:outline-none" value={e.odometroFecha || ""} onChange={v=>upd({odometroFecha: v.target.value})}/>
-               </div>
-            </Card>
-          )}
-
-          {/* Planificación y Útimas Mantenciones */}
-          {!esBateaOCama && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
-              <div className="p-5 bg-slate-50 rounded-2xl border border-slate-200">
-                <h5 className="text-[11px] font-black uppercase text-slate-600 mb-4 tracking-widest">Plan de Mantenimiento</h5>
-                <div className="grid grid-cols-2 gap-4">
-                  {!esCamioneta && <div><Label>Prev cada ({unit})</Label><Input type="number" placeholder={cat?.defaultPreventive} value={e.preventivaCada || ""} onChange={v=>upd({preventivaCada: Number(v.target.value)})}/></div>}
-                  <div><Label>Gen cada ({unit})</Label><Input type="number" value={e.generalCada || (esCamioneta ? 5000 : 2000)} onChange={v=>upd({generalCada:Number(v.target.value)})}/></div>
-                  <div className="col-span-2"><Label>{esCamioneta ? "Km" : "Horas"} Diarias (Proyección)</Label><Input type="number" value={e.horasDiariasOverride || ""} onChange={v=>upd({horasDiariasOverride: Number(v.target.value)})}/></div>
-                </div>
+        {/* Lectura Actual */}
+        {!esBOC&&(
+          <div style={{background:"#1d4ed8",borderRadius:16,padding:22,boxShadow:"0 4px 20px rgba(29,78,216,0.35)"}}>
+            <p style={{fontSize:12,fontWeight:700,color:"#ffffff",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:14,display:"flex",alignItems:"center",gap:8}}>
+              <span>📍</span> Lectura Actual
+            </p>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
+              <div>
+                <Lbl c="#ffffff">{lbl} ({unit})</Lbl>
+                <input type="number" style={{width:"100%",padding:"13px 16px",borderRadius:12,background:"#ffffff",color:"#1e3a8a",fontWeight:900,fontSize:26,border:"none",outline:"none",boxSizing:"border-box"}} value={e.horaActual||""} onChange={v=>upd({horaActual:Number(v.target.value)})} placeholder="0"/>
               </div>
-              <div className="p-5 bg-slate-50 rounded-2xl border border-slate-200">
-                <h5 className="text-[11px] font-black uppercase text-slate-600 mb-4 tracking-widest">Últimas Realizadas</h5>
-                <div className="grid grid-cols-2 gap-4">
-                  {!esCamioneta && <div><Label>Última Prev ({unit})</Label><Input type="number" value={e.ultimaPreventivaHora || ""} onChange={v=>upd({ultimaPreventivaHora:Number(v.target.value)})}/></div>}
-                  <div><Label>Última Gen ({unit})</Label><Input type="number" value={e.ultimaGeneralHora || ""} onChange={v=>upd({ultimaGeneralHora:Number(v.target.value)})}/></div>
-                  {!sinLegal && (
-                    <>
-                      <div><Label>Vence RT</Label><Input type="date" value={e.rtUltima || ""} onChange={v=>upd({rtUltima:v.target.value})}/></div>
-                      <div><Label>Vence PC</Label><Input type="date" value={e.pcUltimo || ""} onChange={v=>upd({pcUltimo:v.target.value})}/></div>
-                    </>
-                  )}
-                </div>
+              <div>
+                <Lbl c="#ffffff">Fecha de Lectura</Lbl>
+                <input type="date" style={{width:"100%",padding:"13px 16px",borderRadius:12,background:"#ffffff",color:"#1e3a8a",fontWeight:600,fontSize:15,border:"none",outline:"none",boxSizing:"border-box"}} value={e.horaActualFecha||""} onChange={v=>upd({horaActualFecha:v.target.value})}/>
               </div>
             </div>
-          )}
+          </div>
+        )}
 
-          {esBateaOCama && (
-            <div className="grid grid-cols-2 gap-4 mb-8">
-              <div><Label>Vence Revisión Técnica</Label><Input type="date" value={e.rtUltima || ""} onChange={v=>upd({rtUltima:v.target.value})}/></div>
-              <div><Label>Vence Permiso de Circulación</Label><Input type="date" value={e.pcUltimo || ""} onChange={v=>upd({pcUltimo:v.target.value})}/></div>
+        {/* Odómetro Camiones */}
+        {esCamion&&(
+          <div style={{background:"#1e293b",borderRadius:16,padding:22,boxShadow:"0 4px 16px rgba(0,0,0,0.25)"}}>
+            <p style={{fontSize:12,fontWeight:700,color:"#ffffff",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:14,display:"flex",alignItems:"center",gap:8}}>
+              <span>🛣️</span> Odómetro Complementario (km)
+            </p>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
+              <div>
+                <Lbl c="#ffffff">Km Actual</Lbl>
+                <input type="number" style={{width:"100%",padding:"12px 14px",borderRadius:10,background:"#334155",color:"#ffffff",fontWeight:900,fontSize:22,border:"none",outline:"none",boxSizing:"border-box"}} placeholder="0" value={e.odometro||""} onChange={v=>upd({odometro:Number(v.target.value)})}/>
+              </div>
+              <div>
+                <Lbl c="#ffffff">Fecha</Lbl>
+                <input type="date" style={{width:"100%",padding:"12px 14px",borderRadius:10,background:"#334155",color:"#ffffff",fontWeight:500,fontSize:14,border:"none",outline:"none",boxSizing:"border-box"}} value={e.odometroFecha||""} onChange={v=>upd({odometroFecha:v.target.value})}/>
+              </div>
             </div>
-          )}
+          </div>
+        )}
 
-          <div className="mb-8"><Label>Notas de Terreno</Label><textarea className="w-full px-4 py-3 rounded-xl border-2 border-slate-300 focus:border-blue-500 text-sm h-24 text-slate-900 font-bold" value={e.notas || ""} onChange={v=>upd({notas:v.target.value})} placeholder="Escribir fallas o pendientes aquí..."/></div>
-
-          {!esBateaOCama && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {!esCamioneta && <InsumosTable title="Insumos Preventiva" value={e.insumosPrev} onChange={v=>upd({insumosPrev:v})}/>}
-              <InsumosTable title="Insumos General" value={e.insumosGen} onChange={v=>upd({insumosGen:v})}/>
+        {/* Plan + Intervenciones */}
+        {!esBOC&&(
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
+            <div style={{background:P.card,border:`1px solid ${P.border}`,borderRadius:14,padding:18,boxShadow:"0 1px 3px rgba(0,0,0,0.05)"}}>
+              <Sec>Plan de Mantenimiento</Sec>
+              <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                {!esCam&&<div><Lbl>Preventiva cada ({unit})</Lbl><Inp type="number" value={e.preventivaCada||""} placeholder="ej: 200" onChange={v=>upd({preventivaCada:Number(v.target.value)})}/></div>}
+                <div><Lbl>General cada ({unit})</Lbl><Inp type="number" value={e.generalCada||""} placeholder={esCam?"ej: 5000":"ej: 2000"} onChange={v=>upd({generalCada:Number(v.target.value)})}/></div>
+                <div><Lbl>{unit} Proyectadas / Día</Lbl><Inp type="number" value={e.horasDiariasOverride||""} placeholder="ej: 8" onChange={v=>upd({horasDiariasOverride:Number(v.target.value)})}/></div>
+              </div>
             </div>
-          )}
-        </Card>
+            <div style={{background:P.card,border:`1px solid ${P.border}`,borderRadius:14,padding:18,boxShadow:"0 1px 3px rgba(0,0,0,0.05)"}}>
+              <Sec>Últimas Intervenciones</Sec>
+              <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                {!esCam&&<div><Lbl>Últ. Preventiva ({unit})</Lbl><Inp type="number" value={e.ultimaPreventivaHora||""} placeholder="0" onChange={v=>upd({ultimaPreventivaHora:Number(v.target.value)})}/></div>}
+                <div><Lbl>Últ. General ({unit})</Lbl><Inp type="number" value={e.ultimaGeneralHora||""} placeholder="0" onChange={v=>upd({ultimaGeneralHora:Number(v.target.value)})}/></div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Insumos */}
+        {!esBOC&&(
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
+            {!esCam&&<InsumosTable title="Insumos Preventiva" value={e.insumosPrev||[]} onChange={v=>upd({insumosPrev:v})}/>}
+            <InsumosTable title="Insumos General" value={e.insumosGen||[]} onChange={v=>upd({insumosGen:v})}/>
+          </div>
+        )}
+
+        {/* Notas */}
+        <div style={{background:P.card,border:`1px solid ${P.border}`,borderRadius:14,padding:18,boxShadow:"0 1px 3px rgba(0,0,0,0.05)"}}>
+          <Lbl>Notas y Observaciones</Lbl>
+          <textarea style={{width:"100%",padding:"10px 13px",borderRadius:10,border:`2px solid ${P.border}`,background:P.card,color:P.txtTitle,fontSize:14,resize:"none",outline:"none",boxSizing:"border-box"}} rows={3} placeholder="Observaciones, próximos trabajos, recordatorios..." value={e.notas||""} onChange={v=>upd({notas:v.target.value})}/>
+        </div>
       </div>
 
-      {/* PANEL LATERAL: ESTADOS INDEPENDIENTES Y ALTA VISIBILIDAD (Texto Negro) */}
-      <div className="space-y-4">
-        {!esBateaOCama ? (
-          <Card className="p-6 bg-white border-2 border-slate-200 shadow-xl text-slate-900 text-left">
-            <h4 className="text-[11px] font-black uppercase tracking-widest mb-8 text-slate-600 italic text-center">Estatus de Ciclo</h4>
-            <div className="space-y-10">
-              
-              {/* Bloque Preventiva - Texto Negro Intenso (maximum contrast) - OCULTO PARA CAMIONETAS */}
-              {!esCamioneta && (
-                <div className="relative">
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="text-[10px] font-black uppercase text-slate-600">Próx. Preventiva</span>
-                    <EstadoBadge estado={s.estPrev} />
-                  </div>
-                  <p className="text-3xl font-black italic tracking-tighter text-black leading-none">
-                    {s.estPrev.includes("LECTURA") || s.estPrev.includes("PREV") ? "—" : `${fmt(s.proxPrev)} ${unit}`}
-                  </p>
-                  {!s.estPrev.includes("LECTURA") && !s.estPrev.includes("PREV") && (
-                     <p className="text-[11px] font-black text-black mt-2 uppercase">
-                        {s.estPrev === "VENCIDA" ? "PASADO POR:" : "Restan:"} {fmt(Math.max(0, s.restPrev))} {unit}
-                     </p>
-                  )}
-                  <button onClick={()=>{if(window.confirm(`¿Registrar Preventiva realizada ahora?`)) upd({ultimaPreventivaHora: s.horaActual})}} className="w-full mt-4 bg-slate-900 text-white py-3 rounded-xl font-black text-[10px] uppercase tracking-tighter hover:bg-blue-600 transition-all shadow-md">Registrar Prev.</button>
-                </div>
-              )}
-
-              {/* Bloque General - Texto Negro Intenso (maximum contrast) - SIEMPRE VISIBLE */}
-              <div className={`${!esCamioneta ? 'border-t-2 border-slate-100 pt-8' : ''} relative`}>
-                <div className="flex justify-between items-center mb-2">
-                  <span className="text-[10px] font-black uppercase text-slate-600">Próx. General</span>
-                  <EstadoBadge estado={s.estGen} />
-                </div>
-                <p className="text-3xl font-black italic tracking-tighter text-black leading-none">
-                  {s.estGen.includes("LECTURA") || s.estGen.includes("GEN") ? "—" : `${fmt(s.proxGen)} ${unit}`}
-                </p>
-                {!s.estGen.includes("LECTURA") && !s.estGen.includes("GEN") && (
-                   <p className="text-[11px] font-black text-black mt-2 uppercase">
-                      {s.estGen === "VENCIDA" ? "PASADO POR:" : "Restan:"} {fmt(Math.max(0, s.restGen))} {unit}
-                   </p>
-                )}
-                <button onClick={()=>{if(window.confirm(`¿Registrar General realizada ahora?`)) upd({ultimaGeneralHora: s.horaActual})}} className="w-full mt-4 bg-white text-slate-900 py-3 rounded-xl font-black text-[10px] uppercase tracking-tighter hover:bg-slate-200 border-2 border-slate-200 transition-all shadow-sm">Registrar Gen.</button>
-              </div>
-            </div>
-          </Card>
-        ) : (
-          <Card className="p-6 bg-slate-900 text-white shadow-xl border border-slate-700">
-             <h4 className="text-[10px] font-black uppercase text-slate-400 mb-6 tracking-widest text-center italic">Estatus Legal</h4>
-             <div className="space-y-6">
-                <div><Label className="text-slate-400">R. Técnica</Label><EstadoBadge estado={estadoPorDias(daysBetween(todayISO(), addYears(e.rtUltima || todayISO(), 1)), 30)} /></div>
-                <div><Label className="text-slate-400">P. Circulación</Label><EstadoBadge estado={estadoPorDias(daysBetween(todayISO(), addYears(e.pcUltimo || todayISO(), 1)), 30)} /></div>
-             </div>
-          </Card>
-        )}
-        <Button variant="danger" className="w-full py-4 opacity-70 hover:opacity-100" onClick={()=>removeEquipo(e.id)}>Dar de baja Activo</Button>
+      {/* COLUMNA LATERAL */}
+      <div style={{display:"flex",flexDirection:"column",gap:12}}>
+        <StatusPanel s={s} e={e} unit={unit} esCamioneta={esCam} upd={upd}/>
+        <Btn v="danger" sx={{width:"100%",padding:"12px"}} onClick={()=>removeEquipo(e.id)}>🗑 Dar de Baja</Btn>
       </div>
     </div>
   );
 });
 
-/* =================== TABLAS E INSUMOS =================== */
-function InsumosTable({ title, value = [], onChange }){
-  const add = () => onChange([...value, { tipo:"Filtro", nombre:"", cant:1 }]);
-  return (
-    <div className="bg-white border-2 border-slate-100 rounded-2xl p-4 shadow-inner">
-      <div className="flex justify-between items-center mb-4">
-        <h4 className="font-black text-[10px] uppercase text-slate-500 tracking-widest">{title}</h4>
-        <button onClick={add} className="text-[10px] font-black text-blue-600 hover:text-blue-800 uppercase tracking-tighter border-b-2 border-blue-600">+ AGREGAR</button>
-      </div>
-      <div className="space-y-2">
-        {value.map((r, i) => (
-          <div key={i} className="flex gap-2 items-center border-b border-slate-100 pb-2 text-slate-900">
-            <input className="text-[10px] border-none bg-slate-100 rounded p-1 w-10 font-black text-slate-900" type="number" value={r.cant} onChange={e=>onChange(value.map((x,idx)=>idx===i?{...x, cant:Number(e.target.value)}:x))} />
-            <input className="text-[10px] border-none bg-slate-100 rounded flex-1 p-1 font-bold text-slate-900" placeholder="Nombre..." value={r.nombre} onChange={e=>onChange(value.map((x,idx)=>idx===i?{...x, nombre:e.target.value}:x))} />
-            <button onClick={()=>onChange(value.filter((_,idx)=>idx!==i))} className="text-red-400 font-bold px-1 text-xs">✕</button>
-          </div>
-        ))}
-      </div>
+/* ── RESUMEN ── */
+function Resumen({equipos,calcularEstado}){
+  const st=useMemo(()=>{
+    let v=0,u=0,ok=0;
+    equipos.forEach(e=>{ const s=calcularEstado(e).salud; if(s==="VENCIDA")v++; else if(s==="URGENTE")u++; else ok++; });
+    return{total:equipos.length,v,u,ok};
+  },[equipos,calcularEstado]);
+  if(!st.total)return null;
+  return(
+    <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:24}}>
+      {[
+        {l:"Total",    n:st.total, bg:"#f1f5f9", fg:P.txtTitle},
+        {l:"Vencidas", n:st.v,     bg:st.v>0?P.red:"#f1f5f9",     fg:st.v>0?"#fff":P.txtMuted},
+        {l:"Urgentes", n:st.u,     bg:st.u>0?P.orange:"#f1f5f9",  fg:st.u>0?"#fff":P.txtMuted},
+        {l:"Al día",   n:st.ok,    bg:P.green, fg:"#fff"},
+      ].map(s=>(
+        <div key={s.l} style={{background:s.bg,borderRadius:14,padding:"14px 10px",textAlign:"center"}}>
+          <div style={{fontSize:30,fontWeight:900,color:s.fg,lineHeight:1}}>{s.n}</div>
+          <div style={{fontSize:11,fontWeight:700,color:s.fg,textTransform:"uppercase",letterSpacing:"0.05em",marginTop:3,opacity:0.85}}>{s.l}</div>
+        </div>
+      ))}
     </div>
   );
 }
 
-/* =========================== APP PRINCIPAL =========================== */
+/* ── APP ── */
 export default function AppMantenciones(){
-  const [equipos, setEquipos] = useState([]);
-  const [view, setView] = useState({ cat: null, id: null });
+  const[equipos,setEquipos]=useState([]);
+  const[loading,setLoading]=useState(true);
+  const[view,setView]=useState({cat:null,id:null});
 
   useEffect(()=>{
     let unsub=null;
     ensureAnonAuth().then(()=>{
-      unsub = onSnapshot(collection(db,"equipos"), snap => setEquipos(snap.docs.map(d=>({ id:d.id, ...d.data() }))));
-    });
-    return ()=>unsub && unsub();
+      unsub=onSnapshot(collection(db,"equipos"),snap=>{
+        setEquipos(snap.docs.map(d=>({id:d.id,...d.data()})));
+        setLoading(false);
+      });
+    }).catch(e=>{console.error(e);setLoading(false);});
+    return()=>unsub&&unsub();
   },[]);
 
-  const calcularEstado = useCallback((e)=>{
-    const esCamioneta = e.categoria === "CAMIONETA";
-    if (["BATEA", "CAMA_BAJA"].includes(e.categoria)) return { salud: "OK", estPrev: "OK", estGen: "OK" };
-
-    const cat = CATEGORIES.find(c=>c.id===e.categoria);
-    const prevCada = Number(e.preventivaCada ?? cat?.defaultPreventive ?? 250);
-    const genCada = Number(e.generalCada || (esCamioneta ? 5000 : 2000));
-    
-    // Lógica de errores individuales (Punto 3 Real: Independencia)
-    let estPrev = "OK", estGen = "OK";
-    const prontoLim = esCamioneta ? 1000 : 120;
-    const urgenteLim = esCamioneta ? 500 : 40;
-
-    // Cálculo de hora actual proyectada
-    const elapsed = e.horaActualFecha ? (e.horasDiariasOverride > 0 ? daysBetween(e.horaActualFecha, todayISO()) * e.horasDiariasOverride : workingHoursBetween(e.horaActualFecha, todayISO())) : 0;
-    const horaActual = Number(e.horaActual||0) + Math.max(0, elapsed);
-
-    // Validación Preventiva (Ignorar para Camionetas)
-    if (!esCamioneta) {
-        if (!e.horaActual || e.horaActual === 0) { estPrev = "⚠️ INGRESAR LECTURA"; }
-        else if (!e.ultimaPreventivaHora || e.ultimaPreventivaHora === 0) { estPrev = "⚙️ CONFIG. PREV"; }
-        else {
-          const prox = Number(e.ultimaPreventivaHora) + prevCada;
-          const rest = prox - horaActual;
-          if (rest <= 0) estPrev = "VENCIDA"; // Corrección: Negative is Vencida
-          else if (rest <= urgenteLim) estPrev = "URGENTE";
-          else if (rest <= prontoLim) estPrev = "PRONTO";
-        }
+  const calcularEstado=useCallback((e)=>{
+    const esCam=e.categoria==="CAMIONETA";
+    if(["BATEA","CAMA_BAJA"].includes(e.categoria))return{salud:"OK",estPrev:"OK",estGen:"OK",horaActual:0};
+    const cat=CATEGORIES.find(c=>c.id===e.categoria);
+    const prevCada=Number(e.preventivaCada??cat?.defaultPreventive??250);
+    const genCada=Number(e.generalCada||(esCam?5000:2000));
+    const pL=esCam?1000:120, uL=esCam?500:40;
+    const elapsed=e.horaActualFecha?(Number(e.horasDiariasOverride)>0?daysBetween(e.horaActualFecha,todayISO())*Number(e.horasDiariasOverride):workHrs(e.horaActualFecha,todayISO())):0;
+    const ha=Number(e.horaActual||0)+Math.max(0,elapsed);
+    let ep="OK",eg="OK";
+    if(!esCam){
+      if(!e.horaActual||e.horaActual===0)ep="⚠️ LECTURA";
+      else if(!e.ultimaPreventivaHora||e.ultimaPreventivaHora===0)ep="⚙️ PREV";
+      else{const r=(Number(e.ultimaPreventivaHora)+prevCada)-ha; if(r<=0)ep="VENCIDA";else if(r<=uL)ep="URGENTE";else if(r<=pL)ep="PRONTO";}
     }
+    if(!e.horaActual||e.horaActual===0)eg="⚠️ LECTURA";
+    else if(!e.ultimaGeneralHora||e.ultimaGeneralHora===0)eg="🛠️ GEN";
+    else{const r=(Number(e.ultimaGeneralHora)+genCada)-ha; if(r<=0)eg="VENCIDA";else if(r<=uL)eg="URGENTE";else if(r<=pL)eg="PRONTO";}
+    const pr={VENCIDA:6,URGENTE:5,"⚠️ LECTURA":4,"⚙️ PREV":3,"🛠️ GEN":2,PRONTO:1,OK:0};
+    const worst=esCam?eg:(pr[ep]>=pr[eg]?ep:eg);
+    return{horaActual:ha,proxPrev:Number(e.ultimaPreventivaHora||0)+prevCada,proxGen:Number(e.ultimaGeneralHora||0)+genCada,restPrev:(Number(e.ultimaPreventivaHora||0)+prevCada)-ha,restGen:(Number(e.ultimaGeneralHora||0)+genCada)-ha,estPrev:ep,estGen:eg,salud:worst};
+  },[]);
 
-    // Validación General
-    if (!e.horaActual || e.horaActual === 0) { estGen = "⚠️ INGRESAR LECTURA"; }
-    else if (!e.ultimaGeneralHora || e.ultimaGeneralHora === 0) { estGen = "🛠️ CONFIG. GEN"; }
-    else {
-        const prox = Number(e.ultimaGeneralHora) + genCada;
-        const rest = prox - horaActual;
-        if (rest <= 0) estGen = "VENCIDA"; // Corrección: Negative is Vencida
-        else if (rest <= urgenteLim) estGen = "URGENTE";
-        else if (rest <= prontoLim) estGen = "PRONTO";
-    }
+  const pageStyle={padding:24,maxWidth:1100,margin:"0 auto",minHeight:"100vh",background:P.page};
 
-    const priority = { VENCIDA: 6, URGENTE: 5, "⚠️ INGRESAR LECTURA": 4, "⚙️ CONFIG. PREV": 3, "🛠️ CONFIG. GEN": 2, PRONTO: 1, OK: 0 };
-    
-    // Worrst logic depends on category
-    let worst = "OK";
-    if (esCamioneta) {
-        worst = estGen; // Only General for trucks
-    } else {
-        worst = priority[estPrev] >= priority[estGen] ? estPrev : estGen;
-    }
-
-    return { 
-      horaActual, 
-      proxPrev: (Number(e.ultimaPreventivaHora||0) + prevCada), 
-      proxGen: (Number(e.ultimaGeneralHora||0) + genCada), 
-      restPrev: ((Number(e.ultimaPreventivaHora||0) + prevCada) - horaActual),
-      restGen: ((Number(e.ultimaGeneralHora||0) + genCada) - horaActual),
-      estPrev, estGen, salud: worst 
-    };
-  }, []);
-
-  if (!view.cat) {
-    return (
-      <div className="p-6 max-w-6xl mx-auto min-h-screen bg-slate-50 font-sans text-slate-900 text-left">
-        <header className="mb-10 flex justify-between items-end border-b-4 border-slate-200 pb-6">
-          <div><h1 className="text-5xl font-black tracking-tighter uppercase italic text-black leading-none">VIA 5</h1><p className="font-black text-blue-600 uppercase text-[11px] tracking-widest mt-2">GESTIÓN EFESA INGENIERIA</p></div>
-        </header>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {CATEGORIES.map(c => {
-            const unidades = equipos.filter(e => e.categoria === c.id);
-            const statusList = unidades.map(e => calcularEstado(e).salud);
-            const esCritico = statusList.some(s => ["VENCIDA","URGENTE"].includes(s));
-            const esFalta = statusList.some(s => s.includes("LECTURA") || s.includes("PREV") || s.includes("GEN"));
-            return (
-              <Card key={c.id} onClick={() => setView({ cat: c.id, id: null })} className="p-8 group hover:border-slate-300 shadow-sm transition-all duration-300 border border-slate-200 bg-white">
-                <div className="flex justify-between items-start mb-6">
-                  <span className="text-7xl group-hover:scale-110 transition-transform duration-300">{c.icon}</span>
-                  {unidades.length > 0 && <span className={`px-3 py-1 rounded-full text-[10px] font-black ${esCritico ? 'bg-red-600 text-white animate-pulse' : (esFalta ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-800')}`}>{unidades.length} UNIDS</span>}
-                </div>
-                <h3 className="text-xl font-black text-slate-900 uppercase italic leading-none">{c.label}</h3>
-              </Card>
-            );
-          })}
-        </div>
-      </div>
-    );
-  }
-
-  if (view.cat && !view.id) {
-    const cat = CATEGORIES.find(c => c.id === view.cat);
-    return (
-      <div className="p-6 max-w-6xl mx-auto min-h-screen bg-slate-50 text-left">
-        <div className="flex items-center gap-4 mb-10 text-slate-900">
-          <Button variant="secondary" onClick={() => setView({ cat: null, id: null })} className="rounded-full w-12 h-12 p-0 text-xl font-black border-slate-300 shadow-sm">←</Button>
-          <h2 className="text-4xl font-black uppercase italic tracking-tighter text-black">{cat.icon} {cat.label}</h2>
-        </div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-          {equipos.filter(e => e.categoria === view.cat).map(e => (
-            <Card key={e.id} onClick={() => setView({ ...view, id: e.id })} className="p-6 border-l-[16px] border-l-blue-600 shadow-md hover:shadow-xl transition-all border-slate-200 bg-white">
-              <div className="font-black text-2xl mb-1 text-black tracking-tighter uppercase">{e.patente || "S/P"}</div>
-              <div className="text-[10px] font-black text-slate-500 mb-6 uppercase tracking-widest">{e.marca || "No definida"}</div>
-              <div className="text-left"><EstadoBadge estado={calcularEstado(e).salud} /></div>
-            </Card>
-          ))}
-          <button onClick={() => {
-            const base = { categoria: view.cat, marca:"", patente:"", horaActual:0, horaActualFecha: todayISO(), ultimaPreventivaHora:0, ultimaGeneralHora:0, insumosPrev: [], insumosGen: [], documentos: [], notas: "", updatedAt: serverTimestamp() };
-            addDoc(collection(db,"equipos"), base).then(d => setView({...view, id: d.id}));
-          }} className="border-4 border-dashed border-slate-300 rounded-3xl p-6 flex flex-col items-center justify-center text-slate-300 hover:text-blue-600 hover:border-blue-600 transition-all font-black uppercase text-xl">+ NUEVO</button>
-        </div>
-      </div>
-    );
-  }
-
-  const equipoActual = equipos.find(x => x.id === view.id);
-  return (
-    <div className="p-6 max-w-7xl mx-auto min-h-screen bg-slate-50 text-slate-900 text-left">
-      <div className="mb-8 flex justify-between items-center bg-white p-6 rounded-3xl shadow-sm border border-slate-200">
-        <Button variant="secondary" onClick={() => setView({ ...view, id: null })}>← Listado de Flota</Button>
-        <div className="text-right">
-          <p className="text-[11px] font-black text-blue-600 uppercase tracking-widest leading-none">EXPEDIENTE DE EQUIPO</p>
-          <h2 className="text-3xl font-black text-slate-950 italic uppercase tracking-tighter leading-none">{equipoActual?.patente || "NUEVO"}</h2>
-        </div>
-      </div>
-      {equipoActual && <RowEditor e={equipoActual} calcularEstado={calcularEstado} updateEquipo={(id, p) => updateDoc(doc(db, "equipos", id), { ...p, updatedAt: serverTimestamp() })} removeEquipo={(id) => { if(window.confirm("¿Eliminar este equipo permanentemente de la base de datos?")) { deleteDoc(doc(db,"equipos",id)); setView({...view, id: null}); } }} />}
+  if(loading)return(
+    <div style={{minHeight:"100vh",background:P.page,display:"flex",alignItems:"center",justifyContent:"center"}}>
+      <div style={{textAlign:"center"}}><div style={{fontSize:48,marginBottom:12}}>🛠️</div><p style={{color:P.txtBody,fontWeight:600}}>Conectando con Firebase...</p></div>
     </div>
   );
-}
 
-function estadoPorDias(dias, horizonte){
-  if(dias<=0) return "VENCIDA"; if(dias<=7) return "URGENTE"; if(dias<=horizonte) return "PRONTO"; return "OK";
+  /* INICIO */
+  if(!view.cat)return(
+    <div style={pageStyle}>
+      <header style={{marginBottom:24,paddingBottom:18,borderBottom:`4px solid ${P.dark}`}}>
+        <h1 style={{fontSize:50,fontWeight:900,color:P.txtTitle,textTransform:"uppercase",fontStyle:"italic",lineHeight:1,margin:0}}>VIA 5</h1>
+        <p style={{color:P.blue,fontWeight:700,fontSize:12,textTransform:"uppercase",letterSpacing:"0.25em",marginTop:6}}>Gestión de Flota y Mantenciones</p>
+      </header>
+      <Resumen equipos={equipos} calcularEstado={calcularEstado}/>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))",gap:18}}>
+        {CATEGORIES.map(c=>{
+          const us=equipos.filter(e=>e.categoria===c.id);
+          const sl=us.map(e=>calcularEstado(e).salud);
+          const crit=sl.some(s=>["VENCIDA","URGENTE"].includes(s));
+          const falt=sl.some(s=>s.includes("LECTURA")||s.includes("PREV")||s.includes("GEN"));
+          return(
+            <div key={c.id} onClick={()=>setView({cat:c.id,id:null})}
+              style={{background:P.card,border:`2px solid ${P.border}`,borderRadius:16,padding:26,cursor:"pointer",transition:"all 0.15s",boxShadow:"0 1px 4px rgba(0,0,0,0.06)"}}
+              onMouseOver={e=>{e.currentTarget.style.boxShadow="0 6px 20px rgba(0,0,0,0.12)";e.currentTarget.style.transform="translateY(-2px)";}}
+              onMouseOut={e=>{e.currentTarget.style.boxShadow="0 1px 4px rgba(0,0,0,0.06)";e.currentTarget.style.transform="none";}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14}}>
+                <span style={{fontSize:48}}>{c.icon}</span>
+                {us.length>0&&<span style={{padding:"3px 10px",borderRadius:20,fontSize:12,fontWeight:700,background:crit?P.red:falt?P.dark:"#e2e8f0",color:crit||falt?"#fff":P.txtTitle}}>{us.length} equipo{us.length!==1?"s":""}</span>}
+              </div>
+              <h3 style={{fontSize:18,fontWeight:900,color:P.txtTitle,textTransform:"uppercase",fontStyle:"italic",margin:0}}>{c.label}</h3>
+              {us.length===0&&<p style={{fontSize:12,color:P.txtDim,marginTop:4}}>Sin equipos registrados</p>}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+
+  /* LISTADO */
+  if(view.cat&&!view.id){
+    const cat=CATEGORIES.find(c=>c.id===view.cat);
+    const ecs=equipos.filter(e=>e.categoria===view.cat);
+    return(
+      <div style={pageStyle}>
+        <div style={{display:"flex",alignItems:"center",gap:14,marginBottom:24}}>
+          <Btn v="secondary" sx={{borderRadius:"50%",width:42,height:42,padding:0,fontSize:18}} onClick={()=>setView({cat:null,id:null})}>←</Btn>
+          <div>
+            <h2 style={{fontSize:34,fontWeight:900,color:P.txtTitle,textTransform:"uppercase",fontStyle:"italic",lineHeight:1,margin:0}}>{cat.icon} {cat.label}</h2>
+            <p style={{fontSize:12,color:P.txtMuted,fontWeight:600,marginTop:4}}>{ecs.length} equipo{ecs.length!==1?"s":""} registrado{ecs.length!==1?"s":""}</p>
+          </div>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(190px,1fr))",gap:14}}>
+          {ecs.map(e=>{
+            const s=calcularEstado(e);
+            const bc={VENCIDA:P.red,URGENTE:P.orange,PRONTO:P.yellow,OK:P.green}[s.salud]||P.green;
+            return(
+              <div key={e.id} onClick={()=>setView({...view,id:e.id})}
+                style={{background:P.card,border:`1px solid ${P.border}`,borderLeft:`6px solid ${bc}`,borderRadius:14,padding:18,cursor:"pointer",boxShadow:"0 1px 4px rgba(0,0,0,0.06)",transition:"all 0.15s"}}
+                onMouseOver={e=>{e.currentTarget.style.boxShadow="0 4px 14px rgba(0,0,0,0.12)";}}
+                onMouseOut={e=>{e.currentTarget.style.boxShadow="0 1px 4px rgba(0,0,0,0.06)";}}>
+                <div style={{fontSize:20,fontWeight:900,color:P.txtTitle,textTransform:"uppercase",lineHeight:1,marginBottom:3}}>{e.patente||"S/P"}</div>
+                <div style={{fontSize:11,fontWeight:600,color:P.txtDim,textTransform:"uppercase",marginBottom:10}}>{e.marca||"Sin marca"}</div>
+                {e.operador&&<div style={{fontSize:12,color:P.txtBody,marginBottom:8}}>👤 {e.operador}</div>}
+                <Badge e={s.salud}/>
+              </div>
+            );
+          })}
+          <button onClick={()=>{
+            const base={categoria:view.cat,marca:"",patente:"",operador:"",horaActual:0,horaActualFecha:todayISO(),ultimaPreventivaHora:0,ultimaGeneralHora:0,preventivaCada:CATEGORIES.find(c=>c.id===view.cat)?.defaultPreventive||0,generalCada:0,horasDiariasOverride:0,insumosPrev:[],insumosGen:[],notas:"",updatedAt:serverTimestamp()};
+            addDoc(collection(db,"equipos"),base).then(d=>setView({...view,id:d.id}));
+          }}
+          style={{border:`2px dashed ${P.border}`,borderRadius:14,padding:18,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",background:"transparent",cursor:"pointer",color:P.txtDim,fontWeight:700,fontSize:13,textTransform:"uppercase",gap:8,minHeight:100,transition:"all 0.15s"}}
+          onMouseOver={e=>{e.currentTarget.style.borderColor=P.blue;e.currentTarget.style.color=P.blue;}}
+          onMouseOut={e=>{e.currentTarget.style.borderColor=P.border;e.currentTarget.style.color=P.txtDim;}}>
+            <span style={{fontSize:26}}>+</span><span>Nuevo equipo</span>
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  /* FICHA */
+  const eq=equipos.find(x=>x.id===view.id);
+  return(
+    <div style={{padding:24,maxWidth:1300,margin:"0 auto",minHeight:"100vh",background:P.page}}>
+      <div style={{marginBottom:18,display:"flex",justifyContent:"space-between",alignItems:"center",background:P.card,padding:"14px 18px",borderRadius:14,boxShadow:"0 1px 4px rgba(0,0,0,0.07)",border:`1px solid ${P.border}`}}>
+        <Btn v="secondary" onClick={()=>setView({...view,id:null})}>← Volver</Btn>
+        <div style={{textAlign:"right"}}>
+          <p style={{fontSize:11,fontWeight:700,color:P.blue,textTransform:"uppercase",letterSpacing:"0.15em",margin:0}}>Ficha Técnica</p>
+          <h2 style={{fontSize:26,fontWeight:900,color:P.txtTitle,fontStyle:"italic",textTransform:"uppercase",margin:0,lineHeight:1}}>{eq?.patente||"Sin identificar"}</h2>
+          {eq?.operador&&<p style={{fontSize:12,color:P.txtMuted,margin:"2px 0 0"}}>👤 {eq.operador}</p>}
+        </div>
+      </div>
+      {eq?(
+        <RowEditor e={eq} calcularEstado={calcularEstado}
+          updateEquipo={(id,p)=>updateDoc(doc(db,"equipos",id),{...p,updatedAt:serverTimestamp()})}
+          removeEquipo={(id)=>{if(window.confirm("¿Confirmas dar de baja este activo?")){{deleteDoc(doc(db,"equipos",id));setView({...view,id:null});}}}}/>
+      ):(
+        <div style={{textAlign:"center",padding:"70px 0",color:P.txtDim}}>
+          <p style={{fontSize:46,marginBottom:12}}>🔍</p>
+          <p style={{fontWeight:600}}>Equipo no encontrado</p>
+          <Btn v="secondary" sx={{marginTop:14}} onClick={()=>setView({...view,id:null})}>Volver al listado</Btn>
+        </div>
+      )}
+    </div>
+  );
 }
